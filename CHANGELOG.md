@@ -1,5 +1,16 @@
 # Changelog — Vivi au Ski 3D (`cloud.orbital8.vivi_au_ski`)
 
+## [v1.5.1] (`1.5.1+7`) - 2026-11-12
+
+### Changed & Fixed
+- **Suppression Totale des Microbosses en « Dos d'Âne » (`_paintMogul3D` & `_DepthActorKind.mogul`) (`ORB-75` / `ORB-73` — @Carbon)** :
+  - Suppression intégrale de `_DepthActorKind.mogul` et de la méthode `_paintMogul3D` dans `Ski3DPainter` (`lib/painters/ski_3d_painter.dart`) qui peignaient par-dessus la piste un petit ovale bleu/blanc strié de 5 nervures parallèles (`#5C9ED6`) semblable à un ralentisseur routier (« dos d'âne »).
+  - Ajout des helpers de vérification `debugActiveRenderItemKinds()` et `debugHasZeroMogulOverlayItems()` garantissant qu'aucun overlay séparé de type microbosse n'est jamais émis dans `_buildSortedRenderItems`.
+- **Conservation Exclusive des Larges Bosses 3D Progressivement Intégrées au Maillage (`lib/models/ski_models.dart`, `lib/engine/ski_game_engine.dart`, `lib/painters/ski_3d_painter.dart`)** :
+  - Remplacement des `22 / 34 / 48` micro-bosses courtes (`radiusX = 2.55..4.20 m`, `radiusZ = 3.95..6.40 m`) par **`8`**, **`12`** et **`16`** larges bosses alpines intégrées au relief de la piste (`radiusX = 7.50..10.30 m`, `radiusZ = 14.60..19.60 m`, `heightMeters = 0.98..1.44 m`), étalées sur 6 à 8 tranches longitudinales du maillage 3D avec un profil `C²` (`cos⁴(π/2 · r)`) à dérivées première et seconde nulles sur tout le pourtour et espacement garanti hors des tremplins de saut.
+  - Suppression dans `_paintSingleSnowSlopeSlice3D` du basculement brutal de couleur `#7CB9E8` / `Colors.white` à seuil dur (`if (slopeM > 0.012)`) qui créait des barres transversales, remplacé par un ombrage continu et subtil de la matière neigeuse de la piste (`snowBrightColor` / `snowMidColor` / `snowShadowColor`, variation douce bornée à `<= 0.16`) accompagné de l'évaluation du *crest culling* sur le profil macro de la pente.
+  - Conservation intacte des tremplins de saut bien intégrés (`SkiJumpRamp3D` : `small`, `medium`, `large`) avec talus latéraux de neige (`snow buttresses`) et jupe de transition neigeuse fondue.
+
 ## [v1.5.0] (`1.5.0+6`) - 2026-11-12
 
 ### Added, Changed & Fixed

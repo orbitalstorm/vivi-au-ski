@@ -1,8 +1,8 @@
 name: vivi_au_ski
-description: "VIVI AU SKI : Descente Royale 3D v1.5.0 — Simulation de ski 3D Cartoon Flutter (Android & iOS) dotée d'un moteur 3D volumétrique temps réel & rig 22+ os (BLENDER_LAB : Speedy v03, Wonderland, Giant Denim), Vivienne toujours au-dessus des rampes, matelas orange & collisions 3D intégrales sur sapins, village alpin d'arrivée étoffé (16 bâtiments), télésièges bornés (2 à 5) et bosses de saut fondues dans la piste."
+description: "VIVI AU SKI : Descente Royale 3D v1.5.1 — Simulation de ski 3D Cartoon Flutter (Android & iOS) dotée d'un moteur 3D volumétrique temps réel & rig 22+ os (BLENDER_LAB : Speedy v03, Wonderland, Giant Denim), suppression totale des microbosses en dos d'âne au profit exclusif de larges bosses 3D intégrées à la piste (8/12/16) et de tremplins fondus, Vivienne au-dessus des rampes, matelas sapins orange et village alpin."
 publish_to: 'none'
 
-version: 1.5.0+6
+version: 1.5.1+7
 
 environment:
   sdk: ">=3.5.0 <4.0.0"

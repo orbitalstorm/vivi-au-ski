@@ -16,7 +16,7 @@ enum SkiHapticEvent {
 }
 
 /// Real-time 60–120 FPS 3D Cartoon Ski Simulation & Accelerometer Engine
-/// for `VIVI AU SKI : Descente Royale 3D` (`v1.5.0`).
+/// for `VIVI AU SKI : Descente Royale 3D` (`v1.5.1`).
 class SkiGameEngine extends ChangeNotifier {
   SkiGameEngine({
     SkiTrackId initialTrack = SkiTrackId.greenBlossomValley,
@@ -549,7 +549,7 @@ class SkiGameEngine extends ChangeNotifier {
     return math.tan(slopeRad) - localReliefGradientAt(z);
   }
 
-  /// Smooth `C¹` 3D mogul elevation integrated directly into the snow slope mesh (`v1.4.0`).
+  /// Smooth `C²` (`cos⁴(π/2 * r)`) 3D mogul elevation integrated directly into the snow slope mesh (`v1.5.1`).
   double mogulElevationAt(double worldX, double worldZ) {
     double totalY = 0.0;
     for (int i = 0; i < moguls.length; i++) {
@@ -562,9 +562,10 @@ class SkiGameEngine extends ChangeNotifier {
       final double nz = dz / m.radiusZ;
       final double u2 = nx * nx + nz * nz;
       if (u2 < 1.0) {
-        // C¹-smooth cosine-squared bell (`cos²(π/2 * r)`) with zero rim derivative
+        // C²-smooth cosine-fourth bell (`cos⁴(π/2 * r)`) with zero 1st & 2nd rim derivatives!
         final double c = math.cos(math.sqrt(u2) * math.pi * 0.5);
-        final double dome = m.heightMeters * c * c;
+        final double c2 = c * c;
+        final double dome = m.heightMeters * c2 * c2;
         if (dome > totalY) {
           totalY = dome;
         }
@@ -762,10 +763,11 @@ class SkiGameEngine extends ChangeNotifier {
       final double u2 = nx * nx + nz * nz;
       if (u2 < 1.0) {
         final double c = math.cos(math.sqrt(u2) * math.pi * 0.5);
-        final double domeY = m.heightMeters * c * c;
+        final double c2 = c * c;
+        final double domeY = m.heightMeters * c2 * c2;
         groundSurfaceY = math.max(groundSurfaceY, domeY);
 
-        if (playerY <= domeY + 0.35) {
+        if (domeY >= 0.22 && playerY <= domeY + 0.35) {
           _mogulSquashTimer = 0.26;
           if (!m.absorbed) {
             moguls[i] = m.copyWith(absorbed: true);
@@ -775,8 +777,10 @@ class SkiGameEngine extends ChangeNotifier {
             _spawnPowderBurst(count: 6, upwardVy: 3.4);
             onHapticEvent?.call(SkiHapticEvent.mogulBump);
           }
-          // High-speed crest pop & bonus aerial trick when clear of upcoming jump ramps!
+          // High-speed crest pop & bonus aerial trick when crossing the mogul crown clear of jump ramps!
           if (playerZ >= m.z &&
+              playerZ <= m.z + m.radiusZ * 0.36 &&
+              domeY >= m.heightMeters * 0.42 &&
               playerVy <= 0.5 &&
               speedKmh > _selectedTrack.baseSpeedKmh * 1.05) {
             final bool rampCloseAhead = jumpRamps.any(
@@ -1991,39 +1995,48 @@ class SkiGameEngine extends ChangeNotifier {
       }
     }
 
-    // 5. Dense Integrated 3D Mogul Fields (`22`, `34`, `48`) baked into `snowSurfaceHeightAt`!
+    // 5. Wide, Progressive, Mesh-Integrated 3D Alpine Moguls (`8`, `12`, `16`, `v1.5.1`)!
+    //    Zero short "speed-bump" micro-moguls: every swell spans `radiusX = 7.5..10.3 m`
+    //    and `radiusZ = 14.6..19.6 m` across 6–8 terrain slices with a C² (`cos⁴`) profile!
     final int mogulCount = track.mogulCount;
-    final double mogulSpan = length - 66.0;
+    const double mogulStartZ = 178.0;
+    final double mogulEndZ = math.max(mogulStartZ + 120.0, length - 38.0);
+    final double mogulSpan = mogulEndZ - mogulStartZ;
     final double baseMogulHeight = track == SkiTrackId.greenBlossomValley
-        ? 0.92
-        : (track == SkiTrackId.blueAsnieresForest ? 1.10 : 1.28);
-    for (int i = 0; i < mogulCount; i++) {
-      double mz = 40.0 + (mogulSpan * i / math.max(1, mogulCount - 1));
-      for (final SkiJumpRamp3D r in jumpRamps) {
-        if ((mz - r.z).abs() < r.length * 0.65 + 3.5) {
-          mz += r.length * 0.65 + 4.5;
-        }
-      }
-      mz = mz.clamp(34.0, length - 24.0);
-      final double cx = trackCenterOffsetX(mz);
+        ? 1.04
+        : (track == SkiTrackId.blueAsnieresForest ? 1.14 : 1.22);
 
-      // Alternate lateral waves across left, center, and right of the piste
-      double offset = math.sin(i * 1.75 + 0.4) * (halfW * 0.56);
-      if (slalomFull) {
-        for (final SkiSlalomGate3D g in slalomGates) {
-          if ((g.z - mz).abs() < 7.5 &&
-              ((cx + offset) - g.centerX).abs() < g.halfWidth + 1.8) {
-            offset = (g.isLeftGate ? 1.0 : -1.0) * (halfW * 0.42);
-            break;
+    for (int i = 0; i < mogulCount; i++) {
+      final int profile = i % 3;
+      final double rx = profile == 0 ? 7.50 : (profile == 1 ? 8.90 : 10.30);
+      final double rz = profile == 0 ? 14.60 : (profile == 1 ? 17.20 : 19.60);
+      final double hScale = profile == 0 ? 0.94 : (profile == 1 ? 1.06 : 1.18);
+
+      double mz =
+          mogulStartZ + (mogulSpan * i / math.max(1, mogulCount - 1));
+      // Keep every wide mogul cleanly separated from all 3D jump ramps!
+      for (int pass = 0; pass < 2; pass++) {
+        for (final SkiJumpRamp3D r in jumpRamps) {
+          final double clearance = r.length * 0.5 + rz + 3.5;
+          if ((mz - r.z).abs() < clearance) {
+            if (mz < r.z && (r.z - clearance) >= mogulStartZ - 4.0) {
+              mz = r.z - clearance;
+            } else {
+              mz = r.z + clearance;
+            }
           }
         }
       }
+      mz = mz.clamp(172.0, length - 32.0);
+      final double cx = trackCenterOffsetX(mz);
 
-      // 3 mogul profiles: quick rhythm bump, medium carving mogul, large alpine whaleback!
-      final int profile = i % 3;
-      final double rx = profile == 0 ? 2.55 : (profile == 1 ? 3.35 : 4.20);
-      final double rz = profile == 0 ? 3.95 : (profile == 1 ? 5.15 : 6.40);
-      final double hScale = profile == 0 ? 0.86 : (profile == 1 ? 1.08 : 1.32);
+      // Gentle lateral placement clamped so the full `C²` swell stays inside `[-halfW, +halfW]`
+      final double maxSafeOffset = math.max(0.8, halfW - rx - 0.35);
+      final double offset =
+          (math.sin(i * 1.65 + 0.35) * (halfW * 0.28)).clamp(
+        -maxSafeOffset,
+        maxSafeOffset,
+      );
 
       moguls.add(
         SkiMogul3D(
@@ -2059,6 +2072,11 @@ class SkiGameEngine extends ChangeNotifier {
         }
       }
       final double cx = trackCenterOffsetX(tz);
+      if (!slalomFull && mogulElevationAt(cx + side * lateralDist, tz) > 0.14) {
+        if (mogulElevationAt(cx - side * lateralDist, tz) <= 0.14) {
+          side = -side;
+        }
+      }
       worldProps.add(
         SkiWorldProp3D(
           id: nextPropId++,
@@ -2174,11 +2192,12 @@ class SkiGameEngine extends ChangeNotifier {
       }
       final bool starGold =
           (track == SkiTrackId.blackVendomePeaks && i % 3 == 0) || (i % 6 == 0);
+      final double bx = cx + ribbonOffset;
       blossoms.add(
         SkiBlossomCollectible3D(
           id: blossomId++,
-          x: cx + ribbonOffset,
-          y: 0.45,
+          x: bx,
+          y: mogulElevationAt(bx, bz) + 0.45,
           z: bz,
           isStarGold: starGold,
           points: starGold ? 140 : 60,

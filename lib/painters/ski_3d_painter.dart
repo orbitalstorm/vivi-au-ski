@@ -10,7 +10,6 @@ import 'vivienne_3d_volumetric_rig.dart';
 enum _DepthActorKind {
   terrainSlice,
   worldProp,
-  mogul,
   jumpRamp,
   slalomGate,
   blossom,
@@ -75,7 +74,7 @@ class _ProjectedPoint3D {
 }
 
 /// High-Precision 60–120 FPS 3rd-Person Rear Perspective 3D Renderer (`Camera3D`)
-/// for `VIVI AU SKI : Descente Royale 3D` (`v1.5.0`).
+/// for `VIVI AU SKI : Descente Royale 3D` (`v1.5.1`).
 class Ski3DPainter extends CustomPainter {
   Ski3DPainter({
     required this.engine,
@@ -235,8 +234,6 @@ class Ski3DPainter extends CustomPainter {
             engine.worldProps[item.index],
             project,
           );
-        case _DepthActorKind.mogul:
-          _paintMogul3D(canvas, track, engine.moguls[item.index], project);
         case _DepthActorKind.jumpRamp:
           _paintJumpRamp3D(
             canvas,
@@ -272,10 +269,7 @@ class Ski3DPainter extends CustomPainter {
     canvas.restore();
   }
 
-  /// Diagnostic invariant check (`v1.5.0`): returns `true` iff in the active Z-sorted render
-  /// queue, `_DepthActorKind.viviennePlayer` is drawn strictly AFTER every visible
-  /// `_DepthActorKind.jumpRamp` and `_DepthActorKind.mogul` (so no ramp ever paints over Vivienne).
-  bool debugIsVivienneRenderedAboveAllRamps() {
+  double _computeCameraZ() {
     final SkiTrackId track = engine.selectedTrack;
     final double speedNorm =
         ((engine.speedKmh - track.baseSpeedKmh) /
@@ -288,10 +282,34 @@ class Ski3DPainter extends CustomPainter {
         speedNorm * 1.55 +
         steepFactor * 0.75 +
         (engine.playerY * 0.18).clamp(0.0, 1.6);
-    final double camZ = engine.playerZ - camDistBack;
+    return engine.playerZ - camDistBack;
+  }
 
+  /// Diagnostic helper (`v1.5.1`): returns the active depth-sorted render item kinds
+  /// emitted by `_buildSortedRenderItems` for the current camera position.
+  List<String> debugActiveRenderItemKinds() {
     final List<_DepthRenderItem> items = _buildSortedRenderItems(
-      camZ: camZ,
+      camZ: _computeCameraZ(),
+      visibleSlices: const <_TerrainSlice3D>[],
+    );
+    return items
+        .map((_DepthRenderItem e) => e.kind.name)
+        .toList(growable: false);
+  }
+
+  /// Diagnostic invariant check (`v1.5.1`): guarantees zero separate mogul / speed-bump
+  /// overlay render items are ever emitted in `_buildSortedRenderItems` (all moguls are
+  /// pure 3D snow mesh terrain deformations in `_TerrainSlice3D`).
+  bool debugHasZeroMogulOverlayItems() {
+    return !debugActiveRenderItemKinds().contains('mogul');
+  }
+
+  /// Diagnostic invariant check (`v1.5.0`–`v1.5.1`): returns `true` iff in the active Z-sorted
+  /// render queue, `_DepthActorKind.viviennePlayer` is drawn strictly AFTER every visible
+  /// `_DepthActorKind.jumpRamp` (so no ramp ever paints over Vivienne).
+  bool debugIsVivienneRenderedAboveAllRamps() {
+    final List<_DepthRenderItem> items = _buildSortedRenderItems(
+      camZ: _computeCameraZ(),
       visibleSlices: const <_TerrainSlice3D>[],
     );
     final int vivIdx = items.indexWhere(
@@ -299,9 +317,7 @@ class Ski3DPainter extends CustomPainter {
     );
     if (vivIdx < 0) return false;
     for (int i = 0; i < items.length; i++) {
-      if ((items[i].kind == _DepthActorKind.jumpRamp ||
-              items[i].kind == _DepthActorKind.mogul) &&
-          i > vivIdx) {
+      if (items[i].kind == _DepthActorKind.jumpRamp && i > vivIdx) {
         return false;
       }
     }
@@ -343,19 +359,6 @@ class Ski3DPainter extends CustomPainter {
           _DepthRenderItem(
             zWorld: sortZ,
             kind: _DepthActorKind.worldProp,
-            index: i,
-          ),
-        );
-      }
-    }
-
-    for (int i = 0; i < engine.moguls.length; i++) {
-      final SkiMogul3D m = engine.moguls[i];
-      if (m.z >= zMinVisible && m.z <= zMaxVisible) {
-        items.add(
-          _DepthRenderItem(
-            zWorld: m.z - m.radiusZ * 0.45,
-            kind: _DepthActorKind.mogul,
             index: i,
           ),
         );
@@ -428,24 +431,23 @@ class Ski3DPainter extends CustomPainter {
           b.zWorld.compareTo(a.zWorld),
     );
 
-    // Enforce `v1.5.0` foreground invariant:
+    // Enforce `v1.5.0`–`v1.5.1` foreground invariant:
     // Ramps use `zStart - 0.6` so they render on top of underlying snow mesh slices,
     // which means when `playerZ > zStart + 0.6` (Vivienne climbing or launching off a ramp),
     // `playerZ - 1.2 > zStart - 0.6`. Moving `viviennePlayer` immediately after the last
-    // `jumpRamp` / `mogul` guarantees zero ramp or mogul can EVER paint on top of Vivienne!
+    // `jumpRamp` guarantees zero ramp can EVER paint on top of Vivienne!
     final int vivIdx = items.indexWhere(
       (_DepthRenderItem e) => e.kind == _DepthActorKind.viviennePlayer,
     );
-    int lastRampOrMogulIdx = -1;
+    int lastRampIdx = -1;
     for (int i = 0; i < items.length; i++) {
-      final _DepthActorKind k = items[i].kind;
-      if (k == _DepthActorKind.jumpRamp || k == _DepthActorKind.mogul) {
-        lastRampOrMogulIdx = i;
+      if (items[i].kind == _DepthActorKind.jumpRamp) {
+        lastRampIdx = i;
       }
     }
-    if (vivIdx >= 0 && lastRampOrMogulIdx > vivIdx) {
+    if (vivIdx >= 0 && lastRampIdx > vivIdx) {
       final _DepthRenderItem vivItem = items.removeAt(vivIdx);
-      items.insert(lastRampOrMogulIdx, vivItem);
+      items.insert(lastRampIdx, vivItem);
     }
 
     return items;
@@ -826,6 +828,7 @@ class Ski3DPainter extends CustomPainter {
     double prevCx = engine.trackCenterOffsetX(prevZ);
     List<double> prevMogulH = <double>[];
     List<_ProjectedPoint3D> prevCols = sampleCols(prevZ, prevCx, prevMogulH);
+    double prevMacroMidY = project(prevCx, 0.0, prevZ).y;
     _ProjectedPoint3D prevOuterL = project(prevCx - halfW * 3.5, 0.45, prevZ);
     _ProjectedPoint3D prevOuterR = project(prevCx + halfW * 3.5, 0.45, prevZ);
     bool wasBackFacing = false;
@@ -839,17 +842,16 @@ class Ski3DPainter extends CustomPainter {
       final List<double> currMogulH = <double>[];
       final List<_ProjectedPoint3D> currCols =
           sampleCols(currZ, currCx, currMogulH);
+      final double currMacroMidY = project(currCx, 0.0, currZ).y;
       final _ProjectedPoint3D currOuterL =
           project(currCx - halfW * 3.5, 0.45, currZ);
       final _ProjectedPoint3D currOuterR =
           project(currCx + halfW * 3.5, 0.45, currZ);
 
-      final double prevMidY = prevCols[_kPisteCols ~/ 2].y;
-      final double currMidY = currCols[_kPisteCols ~/ 2].y;
-
-      // Back-face culling for hidden reverse slopes behind convex alpine crests:
-      // As `z` decreases (`zFar -> zNear`), visible front-facing slopes project LOWER on screen (`currMidY >= prevMidY`).
-      final bool isBackFacing = currMidY < prevMidY - 0.35;
+      // Back-face culling for hidden reverse slopes behind macro convex alpine crests:
+      // Evaluated on the macro slope profile (`y = 0.0`) so integrated 3D piste moguls never
+      // trigger spurious full-width horizon crest lines!
+      final bool isBackFacing = currMacroMidY < prevMacroMidY - 0.35;
       if (!isBackFacing) {
         slices.add(
           _TerrainSlice3D(
@@ -874,6 +876,7 @@ class Ski3DPainter extends CustomPainter {
       prevCx = currCx;
       prevCols = currCols;
       prevMogulH = currMogulH;
+      prevMacroMidY = currMacroMidY;
       prevOuterL = currOuterL;
       prevOuterR = currOuterR;
     }
@@ -925,8 +928,8 @@ class Ski3DPainter extends CustomPainter {
       ..close();
     canvas.drawPath(rightBank, Paint()..color = powderColor);
 
-    // 2. Transversely Subdivided Groomed Piste Mesh (`_kPisteCols = 10` columns)
-    //    deforming smoothly in 3D over integrated moguls!
+    // 2. Transversely Subdivided Groomed Piste Mesh (`_kPisteCols = 16` columns)
+    //    deforming smoothly in 3D over wide integrated moguls with continuous piste snow shading (`v1.5.1`)!
     final Color basePisteCol = altBand
         ? Color.lerp(
             track.snowBrightColor,
@@ -938,6 +941,12 @@ class Ski3DPainter extends CustomPainter {
             track.snowShadowColor,
             (0.18 + plungeShade).clamp(0.08, 0.34),
           )!;
+    final Color softPisteShadow = Color.lerp(
+      track.snowMidColor,
+      track.snowShadowColor,
+      0.62,
+    )!;
+    final double sliceDz = math.max(0.35, slice.zFar - slice.zNear);
 
     for (int c = 0; c < _kPisteCols; c++) {
       final _ProjectedPoint3D f0 = slice.farCols[c];
@@ -950,28 +959,19 @@ class Ski3DPainter extends CustomPainter {
           (slice.nearMogulH[c] + slice.nearMogulH[c + 1]) * 0.5;
       final double avgMH = (farMH + nearMH) * 0.5;
 
+      // Subtle, continuous snow shading (`<= 0.16 <= 0.18` max variation, zero hard threshold!)
+      // using strictly the piste's own snow palette (`snowBrightColor` / `snowMidColor` / `snowShadowColor`).
       Color quadColor = basePisteCol;
-      if (avgMH > 0.03) {
-        final double slopeM = farMH - nearMH;
-        final Color glacierShade = Color.lerp(
-          track.snowShadowColor,
-          const Color(0xFF7CB9E8),
-          0.48,
-        )!;
-        if (slopeM > 0.012) {
-          // Downhill lee side of mogul facing camera -> crisp glacier snow sculpting!
-          quadColor = Color.lerp(
-            quadColor,
-            glacierShade,
-            (0.26 + slopeM * 0.65).clamp(0.16, 0.60),
-          )!;
+      if (avgMH > 0.002) {
+        final double dMogulDz = (farMH - nearMH) / sliceDz;
+        final double feather = (avgMH / 0.35).clamp(0.0, 1.0);
+        final double signedShade =
+            ((dMogulDz * 0.82 - avgMH * 0.032) * feather).clamp(-0.16, 0.16);
+        if (signedShade >= 0.0) {
+          quadColor = Color.lerp(quadColor, softPisteShadow, signedShade)!;
         } else {
-          // Sunlit crest / uphill dome of mogul -> sparkling white snow!
-          quadColor = Color.lerp(
-            quadColor,
-            Colors.white,
-            (0.35 + avgMH * 0.45).clamp(0.25, 0.85),
-          )!;
+          quadColor =
+              Color.lerp(quadColor, track.snowBrightColor, -signedShade)!;
         }
       }
 
@@ -1267,7 +1267,9 @@ class Ski3DPainter extends CustomPainter {
     _ProjectedPoint3D Function(double x, double y, double z) project, {
     required int tiers,
   }) {
-    final _ProjectedPoint3D base = project(prop.x, 0.0, prop.z);
+    final double groundY =
+        prop.isOnPiste ? engine.mogulElevationAt(prop.x, prop.z) : 0.0;
+    final _ProjectedPoint3D base = project(prop.x, groundY, prop.z);
     final double s = base.scale * prop.scale;
     if (s < 0.72) return;
 
@@ -1372,9 +1374,10 @@ class Ski3DPainter extends CustomPainter {
   ) {
     final double padZ =
         math.max(camZ + _kZNear * 0.84, prop.z - 0.58 * prop.scale);
-    final _ProjectedPoint3D padBase = project(prop.x, 0.0, padZ);
+    final double groundY = engine.mogulElevationAt(prop.x, padZ);
+    final _ProjectedPoint3D padBase = project(prop.x, groundY, padZ);
     final _ProjectedPoint3D padTop =
-        project(prop.x, 1.48 * prop.scale, padZ);
+        project(prop.x, groundY + 1.48 * prop.scale, padZ);
     final double ps = padBase.scale * prop.scale;
     if (ps < 0.72) return;
 
@@ -1546,120 +1549,6 @@ class Ski3DPainter extends CustomPainter {
         ..color = _kOutline
         ..style = PaintingStyle.stroke
         ..strokeWidth = (s * 0.10).clamp(1.0, 2.4),
-    );
-  }
-
-  void _paintMogul3D(
-    Canvas canvas,
-    SkiTrackId track,
-    SkiMogul3D mogul,
-    _ProjectedPoint3D Function(double x, double y, double z) project,
-  ) {
-    final _ProjectedPoint3D base = project(mogul.x, 0.0, mogul.z);
-    final _ProjectedPoint3D apex =
-        project(mogul.x, mogul.heightMeters, mogul.z);
-    final double s = base.scale;
-    if (s < 0.95) return;
-
-    final double w = mogul.radiusX * 2.25 * s;
-    final double h = math.max(s * 0.68, (base.y - apex.y).abs() * 1.42);
-    final Color glacierShade = Color.lerp(
-      track.snowShadowColor,
-      const Color(0xFF72B4E8),
-      0.55,
-    )!;
-
-    // 1. Feathered Lee-Side Glacier Snow Hollow Shading (fades radially to 0.0 alpha — zero hard edge!)
-    final Rect leeRect = Rect.fromCenter(
-      center: Offset(base.x + w * 0.09, base.y + h * 0.14),
-      width: w * 1.30,
-      height: h * 0.98,
-    );
-    canvas.drawOval(
-      leeRect,
-      Paint()
-        ..shader = ui.Gradient.radial(
-          leeRect.center,
-          math.max(4.0, leeRect.width * 0.50),
-          <Color>[
-            glacierShade.withValues(alpha: 0.64),
-            glacierShade.withValues(alpha: 0.30),
-            glacierShade.withValues(alpha: 0.0),
-          ],
-          const <double>[0.0, 0.58, 1.0],
-        ),
-    );
-
-    // 2. Seamless 3D Snow Swell Dome (sunlit white crown -> soft powder-azure flank -> 0.0 alpha skirt!)
-    final Rect domeRect = Rect.fromCenter(
-      center: Offset(apex.x, (apex.y + base.y) * 0.50),
-      width: w * 1.22,
-      height: h * 1.18,
-    );
-    canvas.drawOval(
-      domeRect,
-      Paint()
-        ..shader = ui.Gradient.radial(
-          Offset(apex.x - w * 0.14, apex.y - h * 0.06),
-          math.max(4.0, domeRect.width * 0.56),
-          <Color>[
-            Colors.white.withValues(alpha: 0.98),
-            const Color(0xFFEBF6FF).withValues(alpha: 0.84),
-            glacierShade.withValues(alpha: 0.46),
-            glacierShade.withValues(alpha: 0.0),
-          ],
-          const <double>[0.0, 0.38, 0.74, 1.0],
-        ),
-    );
-
-    // 3. 3D Groomed Corduroy Snow Ribs (`nervures de damage 3D`) arching across the mogul
-    //    so the bump reads unmistakably as sculpted snow relief integrated into the piste!
-    if (s > 1.35) {
-      for (int r = -2; r <= 2; r++) {
-        final double u = r * 0.25;
-        final double rx = mogul.x + mogul.radiusX * u;
-        final double ribFactor = math.cos(u * math.pi * 0.5);
-        final double ribApexH = mogul.heightMeters * ribFactor * ribFactor;
-        final _ProjectedPoint3D pNear =
-            project(rx, 0.02, mogul.z - mogul.radiusZ * 0.70);
-        final _ProjectedPoint3D pCrown = project(rx, ribApexH + 0.03, mogul.z);
-        final _ProjectedPoint3D pFar =
-            project(rx, 0.02, mogul.z + mogul.radiusZ * 0.70);
-        final Path rib = Path()
-          ..moveTo(pNear.x, pNear.y)
-          ..quadraticBezierTo(
-            pCrown.x,
-            pCrown.y - (pNear.y - pCrown.y) * 0.24,
-            pFar.x,
-            pFar.y,
-          );
-        canvas.drawPath(
-          rib,
-          Paint()
-            ..color = const Color(0xFF5C9ED6).withValues(alpha: 0.38 * ribFactor)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = (s * 0.08).clamp(0.9, 2.2)
-            ..strokeCap = StrokeCap.round,
-        );
-      }
-    }
-
-    // 4. Soft Sunlit Powder Ridge Highlight along upper crest (zero hard outline!)
-    final Path snowCrest = Path()
-      ..moveTo(base.x - w * 0.36, base.y + h * 0.04)
-      ..quadraticBezierTo(
-        apex.x - w * 0.04,
-        apex.y - h * 0.26,
-        base.x + w * 0.36,
-        base.y + h * 0.04,
-      );
-    canvas.drawPath(
-      snowCrest,
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.92)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = (s * 0.16).clamp(1.4, 3.8)
-        ..strokeCap = StrokeCap.round,
     );
   }
 
@@ -2138,7 +2027,8 @@ class Ski3DPainter extends CustomPainter {
   ) {
     final double bob =
         math.sin(engine.ambientTime * 4.2 + b.phaseOffset) * 0.18;
-    final _ProjectedPoint3D ground = project(b.x, 0.0, b.z);
+    final double groundY = engine.mogulElevationAt(b.x, b.z);
+    final _ProjectedPoint3D ground = project(b.x, groundY, b.z);
     final _ProjectedPoint3D p = project(b.x, b.y + bob, b.z);
     if (p.scale < 1.1) return;
 

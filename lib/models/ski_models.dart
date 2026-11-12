@@ -78,7 +78,7 @@ enum VivienneSpectatorCheerStyle {
   doubleJumpCheer,
 }
 
-/// The 3 completely skiable 3D Alpine tracks in `VIVI AU SKI : Descente Royale 3D` (`v1.5.0`).
+/// The 3 completely skiable 3D Alpine tracks in `VIVI AU SKI : Descente Royale 3D` (`v1.5.1`).
 enum SkiTrackId {
   greenBlossomValley(
     id: 'piste_verte',
@@ -86,9 +86,9 @@ enum SkiTrackId {
     title: 'Vallée Blossom Ensoleillée',
     shortTitle: 'Piste Verte',
     difficultyLabel: 'PISTE VERTE • DÉBUTANT',
-    summaryMetrics: '1 200 m • -535 m (24°) • 22 Bosses • 6 Tremplins',
+    summaryMetrics: '1 200 m • -535 m (24°) • 8 Bosses • 6 Tremplins',
     description:
-        'Ciel azur alpin, crêtes & murs à 24° (-535 m), 22 bosses fondues, 6 tremplins intégrés, 3 télésièges et village alpin d\'arrivée.',
+        'Ciel azur alpin, crêtes & murs à 24° (-535 m), 8 larges bosses intégrées, 6 tremplins, 3 télésièges et village alpin d\'arrivée.',
     lengthMeters: 1200.0,
     verticalDropMeters: 535.0,
     slopeDegrees: 24.0,
@@ -99,7 +99,7 @@ enum SkiTrackId {
     curveAmplitudeMeters: 9.5,
     pineTreeCount: 42,
     cableCarCount: 3,
-    mogulCount: 22,
+    mogulCount: 8,
     jumpRampCount: 6,
     slalomGateCount: 12,
     slalomModeGateCount: 28,
@@ -126,9 +126,9 @@ enum SkiTrackId {
     title: 'Forêt des Sapins d\'Asnières',
     shortTitle: 'Piste Bleue',
     difficultyLabel: 'PISTE BLEUE • CARVING',
-    summaryMetrics: '1 800 m • -980 m (34°) • 34 Bosses • 9 Tremplins',
+    summaryMetrics: '1 800 m • -980 m (34°) • 12 Bosses • 9 Tremplins',
     description:
-        'Soleil couchant doré, cassures de pente à 34° (-980 m), 34 bosses fondues, 9 tremplins intégrés, 4 télésièges et village alpin d\'arrivée.',
+        'Soleil couchant doré, cassures de pente à 34° (-980 m), 12 larges bosses intégrées, 9 tremplins, 4 télésièges et village alpin d\'arrivée.',
     lengthMeters: 1800.0,
     verticalDropMeters: 980.0,
     slopeDegrees: 34.0,
@@ -139,7 +139,7 @@ enum SkiTrackId {
     curveAmplitudeMeters: 14.0,
     pineTreeCount: 70,
     cableCarCount: 4,
-    mogulCount: 34,
+    mogulCount: 12,
     jumpRampCount: 9,
     slalomGateCount: 16,
     slalomModeGateCount: 38,
@@ -166,9 +166,9 @@ enum SkiTrackId {
     title: 'Cimes Étoilées Vendôme',
     shortTitle: 'Piste Noire Or',
     difficultyLabel: 'PISTE NOIRE OR • EXPERT',
-    summaryMetrics: '2 500 m • -1 650 m (45°) • 48 Bosses • 12 Tremplins',
+    summaryMetrics: '2 500 m • -1 650 m (45°) • 16 Bosses • 12 Tremplins',
     description:
-        'Nuit étoilée & aurore boréale, murs plongeants à 45° (-1 650 m), 48 bosses fondues, 12 tremplins Big Air, 5 télésièges et village alpin d\'arrivée.',
+        'Nuit étoilée & aurore boréale, murs plongeants à 45° (-1 650 m), 16 larges bosses intégrées, 12 tremplins Big Air, 5 télésièges et village alpin d\'arrivée.',
     lengthMeters: 2500.0,
     verticalDropMeters: 1650.0,
     slopeDegrees: 45.0,
@@ -179,7 +179,7 @@ enum SkiTrackId {
     curveAmplitudeMeters: 18.0,
     pineTreeCount: 98,
     cableCarCount: 5,
-    mogulCount: 48,
+    mogulCount: 16,
     jumpRampCount: 12,
     slalomGateCount: 22,
     slalomModeGateCount: 50,
@@ -605,9 +605,9 @@ class SkiMogul3D {
     required this.id,
     required this.x,
     required this.z,
-    this.radiusX = 2.6,
-    this.radiusZ = 4.2,
-    this.heightMeters = 0.85,
+    this.radiusX = 8.4,
+    this.radiusZ = 16.5,
+    this.heightMeters = 1.15,
     this.absorbed = false,
   });
 

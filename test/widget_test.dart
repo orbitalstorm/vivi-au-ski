@@ -834,8 +834,86 @@ void main() {
     },
   );
 
+  test(
+    'v1.5.1 Zero Speed-Bump Micro-Moguls (_paintMogul3D Removed) & Exclusive Wide C2 Mesh-Integrated Alpine Bosses (8/12/16)',
+    () {
+      expect(SkiTrackId.greenBlossomValley.mogulCount, equals(8));
+      expect(SkiTrackId.blueAsnieresForest.mogulCount, equals(12));
+      expect(SkiTrackId.blackVendomePeaks.mogulCount, equals(16));
+
+      final SkiGameEngine engine = SkiGameEngine(seed: 2026);
+      final Ski3DPainter painter = Ski3DPainter(engine: engine);
+
+      for (final SkiGameMode mode in SkiGameMode.values) {
+        for (final SkiTrackId track in SkiTrackId.values) {
+          engine.startRun(track: track, mode: mode);
+          expect(engine.moguls.length, equals(track.mogulCount));
+
+          // 1. Verify NO short micro-moguls exist (`radiusX >= 6.8` & `radiusZ >= 13.5`,
+          //    specifically `7.2..10.5 m` wide and `14.0..20.0 m` long) and zero overlap with jump ramps!
+          for (final SkiMogul3D m in engine.moguls) {
+            expect(
+              m.radiusX,
+              greaterThanOrEqualTo(6.8),
+              reason:
+                  'Mogul #${m.id} on $track ($mode) must not be a narrow micro-bump',
+            );
+            expect(m.radiusX, inInclusiveRange(7.2, 10.5));
+            expect(
+              m.radiusZ,
+              greaterThanOrEqualTo(13.5),
+              reason:
+                  'Mogul #${m.id} on $track ($mode) must span multiple longitudinal mesh slices (no dos-d\'ane!)',
+            );
+            expect(m.radiusZ, inInclusiveRange(14.0, 20.0));
+            expect(m.heightMeters, inInclusiveRange(0.95, 1.45));
+
+            // C² (`cos⁴`) feathering check: zero at outer rim, gentle near rim (`r = 0.92`), full at crown
+            expect(
+              engine.mogulElevationAt(m.x, m.z + m.radiusZ),
+              closeTo(0.0, 1e-12),
+            );
+            expect(
+              engine.mogulElevationAt(m.x, m.z + m.radiusZ * 0.92),
+              lessThan(0.01),
+            );
+            expect(
+              engine.mogulElevationAt(m.x, m.z),
+              closeTo(m.heightMeters, 1e-6),
+            );
+
+            for (final SkiJumpRamp3D r in engine.jumpRamps) {
+              expect(
+                (m.z - r.z).abs(),
+                greaterThanOrEqualTo(r.length * 0.5 + m.radiusZ),
+                reason:
+                    'Wide mogul #${m.id} must stay cleanly separated from jump ramp #${r.id} on $track',
+              );
+            }
+          }
+
+          // 2. Verify `Ski3DPainter` NEVER emits any separate `_paintMogul3D` / `mogul` overlay item
+          //    at ANY camera position along the entire track!
+          for (double z = 0.0; z <= track.lengthMeters; z += 95.0) {
+            engine.playerZ = z;
+            expect(
+              painter.debugHasZeroMogulOverlayItems(),
+              isTrue,
+              reason:
+                  'Ski3DPainter must never emit a separate mogul overlay item at z=$z on $track',
+            );
+            expect(
+              painter.debugActiveRenderItemKinds(),
+              isNot(contains('mogul')),
+            );
+          }
+        }
+      }
+    },
+  );
+
   testWidgets(
-    'v1.5.0 Vivienne Above Ramps, Orange Safety Pads, 16-Building Finish Village, Full Slalom & 6 Store Screenshots (1080x2400)',
+    'v1.5.1 Zero Speed-Bump Micro-Moguls, Wide Integrated Bosses, Vivienne Above Ramps & 6 Store Screenshots (1080x2400)',
     (WidgetTester tester) async {
       await tester.binding.setSurfaceSize(const Size(360, 800));
       addTearDown(() async => tester.binding.setSurfaceSize(null));
