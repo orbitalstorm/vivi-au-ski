@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// The 3 completely skiable 3D Alpine tracks in `VIVI AU SKI : Descente Royale 3D` (`v1.1.0`).
+/// The 3 completely skiable 3D Alpine tracks in `VIVI AU SKI : Descente Royale 3D` (`v1.2.0`).
 enum SkiTrackId {
   greenBlossomValley(
     id: 'piste_verte',
@@ -197,7 +197,7 @@ enum SkiTrackId {
   }
 }
 
-/// The 4 official playable 3D Vivienne models from `orbitalstorm/BLENDER_LAB`.
+/// The 3 official playable 3D Vivienne models from `orbitalstorm/BLENDER_LAB` (`v1.2.0`).
 enum VivienneSkiEdition {
   speedyV03(
     id: 'speedy_v03',
@@ -218,7 +218,7 @@ enum VivienneSkiEdition {
     carvingMultiplier: 1.04,
     jumpBoostMultiplier: 1.04,
     scoreMultiplier: 1.00,
-    blossomMagnetMeters: 2.3,
+    blossomMagnetMeters: 2.4,
   ),
   wonderland(
     id: 'wonderland',
@@ -239,7 +239,7 @@ enum VivienneSkiEdition {
     carvingMultiplier: 1.08,
     jumpBoostMultiplier: 1.12,
     scoreMultiplier: 1.20,
-    blossomMagnetMeters: 2.8,
+    blossomMagnetMeters: 2.9,
   ),
   giantDenim(
     id: 'giant_denim',
@@ -260,28 +260,7 @@ enum VivienneSkiEdition {
     carvingMultiplier: 1.16,
     jumpBoostMultiplier: 1.10,
     scoreMultiplier: 1.25,
-    blossomMagnetMeters: 2.9,
-  ),
-  neoBlossom(
-    id: 'neo_blossom',
-    name: 'Vivienne LV_NEO Blossom',
-    blendPath: 'models/vivienne_lv_neo_blossom.blend',
-    heroAssetPath: 'assets/sprites/vivienne_neo_blossom_hero.png',
-    subtitle: 'Rose Sakura & Skis / Écharpe Cobalt LV_NEO',
-    perkLabel: 'Aimant Fleurs Blossom +45 % • Score ×1.15',
-    petalColor: Color(0xFFF3B7C3),
-    trimEdgeColor: Color(0xFF1638E8),
-    stitchGoldColor: Color(0xFFFFE082),
-    eyeFlowerColor: Color(0xFF1638E8),
-    motifColor: Color(0xFFFFF0F5),
-    skiDeckColor: Color(0xFF1638E8),
-    skiAccentColor: Color(0xFFF3B7C3),
-    scarfColor: Color(0xFF1638E8),
-    glideBonusMultiplier: 1.05,
-    carvingMultiplier: 1.10,
-    jumpBoostMultiplier: 1.07,
-    scoreMultiplier: 1.15,
-    blossomMagnetMeters: 3.4,
+    blossomMagnetMeters: 3.1,
   );
 
   const VivienneSkiEdition({
@@ -325,6 +304,51 @@ enum VivienneSkiEdition {
   final double jumpBoostMultiplier;
   final double scoreMultiplier;
   final double blossomMagnetMeters;
+
+  /// Prefix used by the pre-rendered Blender Cycles pose sprites (`"speedy_v03"`, `"wonderland"`, `"giant_denim"`).
+  String get spriteKeyPrefix => id;
+
+  /// The 5 Cycles 3D rear-view (`180°`) ski & jump pose sprites (`pose_1`..`pose_5`).
+  List<String> get rearPoseAssetPaths => List<String>.unmodifiable(
+        List<String>.generate(
+          5,
+          (int i) =>
+              'assets/sprites/vivienne_${spriteKeyPrefix}_rear_pose_${i + 1}.png',
+        ),
+      );
+
+  /// The 5 Cycles 3D front-view (`0°`) ski & jump pose sprites (`pose_1`..`pose_5`).
+  List<String> get frontPoseAssetPaths => List<String>.unmodifiable(
+        List<String>.generate(
+          5,
+          (int i) =>
+              'assets/sprites/vivienne_${spriteKeyPrefix}_front_pose_${i + 1}.png',
+        ),
+      );
+
+  /// Exact horizontal foot-sole center fraction in `[0.0, 1.0]` within the cropped Cycles PNG
+  /// so Vivienne's feet stay locked onto the 3D skis across asymmetric accessories (Speedy bag,
+  /// Wonderland heart balloon, Giant Denim skateboard & LV tag) and spin cleanly on-axis.
+  double soleCenterXFraction({
+    required bool isFront,
+    required int poseIndex,
+  }) {
+    final int idx = poseIndex.clamp(0, 4);
+    switch (this) {
+      case VivienneSkiEdition.speedyV03:
+        const List<double> rear = <double>[0.503, 0.537, 0.569, 0.508, 0.576];
+        const List<double> front = <double>[0.494, 0.460, 0.428, 0.489, 0.421];
+        return isFront ? front[idx] : rear[idx];
+      case VivienneSkiEdition.wonderland:
+        const List<double> rear = <double>[0.545, 0.603, 0.619, 0.531, 0.628];
+        const List<double> front = <double>[0.452, 0.394, 0.377, 0.465, 0.369];
+        return isFront ? front[idx] : rear[idx];
+      case VivienneSkiEdition.giantDenim:
+        const List<double> rear = <double>[0.443, 0.500, 0.553, 0.436, 0.583];
+        const List<double> front = <double>[0.554, 0.497, 0.444, 0.561, 0.414];
+        return isFront ? front[idx] : rear[idx];
+    }
+  }
 }
 
 /// Real-time 3D Ski Animation States of Vivienne seen from behind (`180°` & `135°..225°`).
@@ -408,13 +432,12 @@ enum VivienneSkiAnimState {
   final Color badgeColor;
 }
 
-/// Aerial ski figures performed by Vivienne during `airborneCelebration`.
+/// Aerial bonus ski tricks performed by Vivienne during `airborneCelebration` (`v1.2.0`).
 enum SkiAerialTrickKind {
-  victoryVArms('V-ARMS ROYAL', 180),
-  crossSkiGrab('CROSS-SKI MONOGRAM', 240),
-  spreadEagle('SPREAD EAGLE OR', 220),
-  blossomSpin360('BLOSSOM SPIN 360°', 320),
-  speedyBagGrab('SPEEDY BAG GRAB', 260);
+  none('', 0),
+  saut360('SAUT 360°', 250),
+  sautPerilleux('SAUT PÉRILLEUX', 300),
+  grandApexSpread('GRAND SAUT ROYAL', 200);
 
   const SkiAerialTrickKind(this.title, this.bonusPoints);
 
@@ -436,7 +459,7 @@ enum VivienneBlenderPose {
   final String assetPath;
 }
 
-/// 3D Scenery & Obstacle kinds placed along the ski tracks (`v1.1.0`).
+/// 3D Scenery & Obstacle kinds placed along the ski tracks (`v1.2.0`).
 enum SkiPropKind {
   alpinePineTree,
   giantSnowPine,

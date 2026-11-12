@@ -1,5 +1,21 @@
 # Changelog — Vivi au Ski 3D (`cloud.orbital8.vivi_au_ski`)
 
+## [v1.2.0] (`1.2.0+3`) - 2026-11-12
+
+### Added, Changed & Fixed
+- **3 Figurines Officielles Vivienne 3D Cycles de Dos & de Face (`ORB-68` / `ORB-67` — @Carbon)** :
+  - Conservation stricte des **3 modèles officiels `BLENDER_LAB`** dans `VivienneSkiEdition` : `Vivienne Speedy v03` (`speedyV03`), `Vivienne Wonderland` (`wonderland`) et `Vivienne Giant Denim` (`giantDenim`) ; retrait de la variante `neoBlossom` (tout en conservant les banderoles de piste `LV_NEO`).
+  - Suppression intégrale du rendu vectoriel plat de personnage (`_paintRearSkiGogglesAndScarf`, `_paintProceduralRearVivienneRig`, `_paintArticulatedSkiPolesAndVArms`, `_paintEditionSignatureAccessories3D`, `_paintSwingingSpeedyBagOverlay`), éliminant définitivement le bug du rectangle jaune au dos de la tête, les bras/écharpe 2D et tout doublon d'accessoire.
+  - Intégration des 30 sprites 3D Cycles pré-rendus (`rear_pose_1..5.png` à `180°` et `front_pose_1..5.png` à `0°`) avec alignement exact de la semelle des pieds (`soleCenterXFraction`), sac Speedy attaché à la main gauche de `Speedy v03`, tige dorée du ballon cœur passant devant le pétale de `Wonderland`, et sneakers/skateboard 3D natifs sur `Giant Denim`.
+- **Sauts Bonus `Saut 360°` (`+250 pts`) & `Saut Périlleux` (`+300 pts`)** :
+  - Impulsion Big Air renforcée sur les tremplins et les bosses à haute vitesse avec alternance entre `SkiAerialTrickKind.saut360` (rotation hélicoptère `0 -> 2π` autour de l'axe Y basculant dynamiquement entre poses Cycles de dos et de face + halo doré 3D) et `SkiAerialTrickKind.sautPerilleux` (salto complet `0 -> 2π` tête-bêche avec skis solidaires + ruban d'étoiles dorées).
+  - Affichage temps réel du bonus dans le HUD (`"SAUT 360° +250"`, `"SAUT PÉRILLEUX +300"`) et en callouts flottants.
+- **Télésièges & Télécabines Obliques Infinis (`_paintCableCarSystem3D`)** :
+  - Remplacement du court segment local par une ligne de remontée mécanique diagonale infinie (`skewSlope = ±0.52`, traversée `-220 m .. +220 m` d'un bord à l'autre de l'écran avec clipping 3D propre au plan proche `camZ + 5.2`), 6 pylônes treillis métalliques 3D hors-piste et 10 cabines/sièges animés (5 montants, 5 descendants).
+- **Correction de la Parallaxe des Montagnes & Modale de Pause (`pause_modal_overlay`)** :
+  - Suppression totale du modulo `% step` dans `_paintMountainRange` au profit d'un indexage entier continu des sommets et d'amplitudes de parallaxe réalistes (`-camWorldX * 0.14` / `0.26` / `0.06`), éliminant tout saut visuel en virage.
+  - Ajout du bouton Pause dans le HUD (`hud_pause_button`) et de la modale Cartoon **Course en Pause** (`pause_modal_overlay`).
+
 ## [v1.1.0] (`1.1.0+2`) - 2026-11-12
 
 ### Added & Changed

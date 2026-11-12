@@ -16,7 +16,7 @@ enum SkiHapticEvent {
 }
 
 /// Real-time 60–120 FPS 3D Cartoon Ski Simulation & Accelerometer Engine
-/// for `VIVI AU SKI : Descente Royale 3D` (`v1.0.0`).
+/// for `VIVI AU SKI : Descente Royale 3D` (`v1.2.0`).
 class SkiGameEngine extends ChangeNotifier {
   SkiGameEngine({
     SkiTrackId initialTrack = SkiTrackId.greenBlossomValley,
@@ -98,7 +98,78 @@ class SkiGameEngine extends ChangeNotifier {
       math.max(0.0, _selectedTrack.lengthMeters - playerZ);
 
   VivienneSkiAnimState animState = VivienneSkiAnimState.glidingRearNeutral;
-  SkiAerialTrickKind currentAerialTrick = SkiAerialTrickKind.victoryVArms;
+  SkiAerialTrickKind currentAerialTrick = SkiAerialTrickKind.none;
+
+  /// Full `0 -> 2π` yaw rotation angle around Y during `SkiAerialTrickKind.saut360`.
+  double trickSpinAngle = 0.0;
+
+  /// Full `0 -> 2π` head-over-heels flip angle during `SkiAerialTrickKind.sautPerilleux`.
+  double trickFlipAngle = 0.0;
+
+  /// Normalized aerial stunt progress in `[0.0, 1.0]` from takeoff to landing.
+  double trickProgress = 0.0;
+
+  double _expectedFlightDuration = 1.15;
+  int _rampTrickCounter = 0;
+
+  bool get isAirborne => playerY > 0.30 || playerVy > 1.2;
+
+  double get carveRate => (playerVx / 18.0).clamp(-1.0, 1.0);
+
+  double get cameraZ => playerZ - 12.0;
+
+  double worldElevationAt(double z) => trackElevationY(z);
+
+  String get activeHudStatusLabel {
+    if (isAirborne && currentAerialTrick == SkiAerialTrickKind.saut360) {
+      return 'SAUT 360° +${SkiAerialTrickKind.saut360.bonusPoints}';
+    }
+    if (isAirborne && currentAerialTrick == SkiAerialTrickKind.sautPerilleux) {
+      return 'SAUT PÉRILLEUX +${SkiAerialTrickKind.sautPerilleux.bonusPoints}';
+    }
+    return animState.label;
+  }
+
+  Color get activeHudBadgeColor {
+    if (isAirborne && currentAerialTrick == SkiAerialTrickKind.saut360) {
+      return const Color(0xFFFFD700);
+    }
+    if (isAirborne && currentAerialTrick == SkiAerialTrickKind.sautPerilleux) {
+      return const Color(0xFFFF4081);
+    }
+    return animState.badgeColor;
+  }
+
+  /// Dynamic Blender Cycles pose index (`0..4`) matching the active ski & jump phase:
+  /// - `0` (`Pose 1`): Mogul Absorption Squash / Landing Impact Squash
+  /// - `1` (`Pose 2`): Standing Schuss Glide & Dynamic Carving
+  /// - `2` (`Pose 3`): Takeoff / Ramp Launch Stretch
+  /// - `3` (`Pose 4`): Airborne V-Arms Jump
+  /// - `4` (`Pose 5`): High-Apex Grand Celebration Jump
+  int get activeSkierPoseIndex {
+    if (isAirborne) {
+      if (_launchStretchTimer > 0.0 ||
+          animState == VivienneSkiAnimState.rampLaunchStretch ||
+          (playerVy > 6.5 && playerY <= 1.25)) {
+        return 2;
+      }
+      if (playerY > 1.35 || playerVy.abs() <= 3.8) {
+        return 4;
+      }
+      return 3;
+    }
+    if (_landingSquashTimer > 0.0 ||
+        _mogulSquashTimer > 0.0 ||
+        animState == VivienneSkiAnimState.landingImpact ||
+        animState == VivienneSkiAnimState.mogulAbsorptionSquash) {
+      return 0;
+    }
+    if (_launchStretchTimer > 0.0 ||
+        animState == VivienneSkiAnimState.rampLaunchStretch) {
+      return 2;
+    }
+    return 1;
+  }
 
   double currentAnimScaleX = 1.0;
   double currentAnimScaleY = 1.0;
@@ -359,12 +430,12 @@ class SkiGameEngine extends ChangeNotifier {
   }
 
   /// Rear Cycles turntable sprite index (`09..15`, centered on `12 = 180° Dos`)
-  /// or full `00..23` spin frame when executing `blossomSpin360` in midair!
+  /// or full `00..23` spin frame when executing `saut360` in midair!
   int get activeSkierTurntableFrameIndex {
-    if (animState == VivienneSkiAnimState.airborneCelebration &&
-        currentAerialTrick == SkiAerialTrickKind.blossomSpin360) {
-      final double spinAngle = 180.0 + (airtimeSeconds * 360.0);
-      return VivienneTurntableSpec.frameIndexForAngle(spinAngle);
+    if (isAirborne && currentAerialTrick == SkiAerialTrickKind.saut360) {
+      final double spinDegrees =
+          180.0 + (trickSpinAngle * 180.0 / math.pi);
+      return VivienneTurntableSpec.frameIndexForAngle(spinDegrees);
     }
     final double visualCarve =
         (playerRollRadians / 0.42).clamp(-1.0, 1.0);
@@ -579,11 +650,26 @@ class SkiGameEngine extends ChangeNotifier {
             _spawnPowderBurst(count: 6, upwardVy: 3.4);
             onHapticEvent?.call(SkiHapticEvent.mogulBump);
           }
-          // High-speed crest pop!
+          // High-speed crest pop & bonus aerial trick when clear of upcoming jump ramps!
           if (playerZ >= m.z &&
               playerVy <= 0.5 &&
               speedKmh > _selectedTrack.baseSpeedKmh * 1.05) {
-            playerVy = 4.2 * _selectedEdition.jumpBoostMultiplier;
+            final bool rampCloseAhead = jumpRamps.any(
+              (SkiJumpRamp3D r) => r.z > playerZ && (r.z - playerZ) < 32.0,
+            );
+            if (!rampCloseAhead &&
+                speedKmh > _selectedTrack.baseSpeedKmh * 1.24) {
+              final SkiAerialTrickKind mogulTrick = mogulsAbsorbed.isOdd
+                  ? SkiAerialTrickKind.saut360
+                  : SkiAerialTrickKind.sautPerilleux;
+              _launchAerialStunt(
+                launchVy: 9.6 * _selectedEdition.jumpBoostMultiplier,
+                initialHeight: math.max(playerY, domeY + 0.18),
+                trick: mogulTrick,
+              );
+            } else {
+              playerVy = 4.2 * _selectedEdition.jumpBoostMultiplier;
+            }
           }
         }
       }
@@ -619,11 +705,11 @@ class SkiGameEngine extends ChangeNotifier {
       }
     }
 
-    // 5. Vertical Airborne Kinematics (Gravity, Apex Celebration, Landing Impact)
+    // 5. Vertical Airborne Kinematics (Gravity, Saut 360° / Saut Périlleux, Landing Impact)
+    const double skiGravity = 16.8;
     if (playerY > groundSurfaceY || playerVy > 0.0) {
       airtimeSeconds += clampedDt;
       totalAirtimeSeconds += clampedDt;
-      const double skiGravity = 16.2;
       playerVy -= skiGravity * clampedDt;
       playerY += playerVy * clampedDt;
 
@@ -632,6 +718,22 @@ class SkiGameEngine extends ChangeNotifier {
       }
       if (playerY > maxJumpHeightMeters) {
         maxJumpHeightMeters = playerY;
+      }
+
+      // Smooth 0 -> 2π progression for `saut360` and `sautPerilleux`
+      final double flightSpan = math.max(0.55, _expectedFlightDuration * 0.94);
+      trickProgress = (airtimeSeconds / flightSpan).clamp(0.0, 1.0);
+      final double smoothT = 0.55 * trickProgress +
+          0.45 * (0.5 - 0.5 * math.cos(trickProgress * math.pi));
+      if (currentAerialTrick == SkiAerialTrickKind.saut360) {
+        trickSpinAngle = (smoothT * 2.0 * math.pi).clamp(0.0, 2.0 * math.pi);
+        trickFlipAngle = 0.0;
+      } else if (currentAerialTrick == SkiAerialTrickKind.sautPerilleux) {
+        trickFlipAngle = (smoothT * 2.0 * math.pi).clamp(0.0, 2.0 * math.pi);
+        trickSpinAngle = 0.0;
+      } else {
+        trickSpinAngle = 0.0;
+        trickFlipAngle = 0.0;
       }
 
       if (playerY <= groundSurfaceY && playerVy <= 0.0) {
@@ -644,10 +746,18 @@ class SkiGameEngine extends ChangeNotifier {
         playerVy = 0.0;
         airtimeSeconds = 0.0;
         currentJumpHeightMeters = 0.0;
+        currentAerialTrick = SkiAerialTrickKind.none;
+        trickSpinAngle = 0.0;
+        trickFlipAngle = 0.0;
+        trickProgress = 0.0;
       }
     } else {
       playerY = groundSurfaceY;
       playerVy = 0.0;
+      currentAerialTrick = SkiAerialTrickKind.none;
+      trickSpinAngle = 0.0;
+      trickFlipAngle = 0.0;
+      trickProgress = 0.0;
     }
 
     // 6. Slalom Gates Validation
@@ -767,28 +877,117 @@ class SkiGameEngine extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _launchAerialStunt({
+    required double launchVy,
+    required double initialHeight,
+    required SkiAerialTrickKind trick,
+  }) {
+    const double skiGravity = 16.8;
+    playerVy = launchVy;
+    playerY = math.max(playerY, initialHeight);
+    airtimeSeconds = 0.0;
+    currentJumpHeightMeters = playerY;
+    if (playerY > maxJumpHeightMeters) {
+      maxJumpHeightMeters = playerY;
+    }
+
+    // Exact ballistic flight duration: y0 + vy * t - 0.5 * g * t^2 = 0
+    final double disc = launchVy * launchVy + 2.0 * skiGravity * playerY;
+    _expectedFlightDuration =
+        ((launchVy + math.sqrt(math.max(0.0, disc))) / skiGravity)
+            .clamp(0.75, 2.40);
+
+    currentAerialTrick = trick;
+    trickSpinAngle = 0.0;
+    trickFlipAngle = 0.0;
+    trickProgress = 0.0;
+    _launchStretchTimer = 0.20;
+    _speedBoostTimer = 1.4;
+    jumpsCompleted++;
+
+    final int bonus = trick.bonusPoints;
+    if (bonus > 0) {
+      jumpAndMogulPoints += bonus;
+      final Color badgeCol = trick == SkiAerialTrickKind.saut360
+          ? const Color(0xFFFFD700)
+          : const Color(0xFFFF4081);
+      _addCallout(
+        '${trick.title} +$bonus',
+        badgeCol,
+        duration: 1.40,
+      );
+    }
+    _spawnPowderBurst(count: 14, upwardVy: 6.0);
+    onHapticEvent?.call(SkiHapticEvent.rampLaunch);
+  }
+
   void _triggerJumpLaunch(SkiJumpRamp3D ramp) {
     final double speedRatio =
         (speedKmh / _selectedTrack.maxSpeedKmh).clamp(0.75, 1.25);
-    playerVy = ramp.boostVy *
-        _selectedEdition.jumpBoostMultiplier *
-        (0.88 + 0.22 * speedRatio);
-    playerY = math.max(playerY, ramp.heightMeters + 0.28);
-    _launchStretchTimer = 0.20;
-    _speedBoostTimer = 1.4;
+    final double jumpVerticalVelocity =
+        (11.8 + math.max(0.0, ramp.heightMeters - 1.55) * 2.2) *
+            _selectedEdition.jumpBoostMultiplier *
+            (0.88 + 0.20 * speedRatio);
 
-    final List<SkiAerialTrickKind> tricks = SkiAerialTrickKind.values;
-    currentAerialTrick = tricks[jumpsCompleted % tricks.length];
-    jumpsCompleted++;
+    final SkiAerialTrickKind bonusTrick = _rampTrickCounter.isEven
+        ? SkiAerialTrickKind.saut360
+        : SkiAerialTrickKind.sautPerilleux;
+    _rampTrickCounter++;
 
-    final int bonus = currentAerialTrick.bonusPoints;
-    jumpAndMogulPoints += bonus;
-    _addCallout(
-      '${currentAerialTrick.title} +$bonus !',
-      const Color(0xFFFF4081),
+    _launchAerialStunt(
+      launchVy: jumpVerticalVelocity,
+      initialHeight: ramp.heightMeters + 0.28,
+      trick: bonusTrick,
     );
-    _spawnPowderBurst(count: 14, upwardVy: 6.0);
-    onHapticEvent?.call(SkiHapticEvent.rampLaunch);
+  }
+
+  /// Deterministic helper to position Vivienne midair in a `saut360` or `sautPerilleux`
+  /// at a specific normalized `progress` in `[0.0, 1.0]` for tests and Store screenshots.
+  void triggerBonusJumpForTest({
+    required SkiAerialTrickKind trick,
+    double progress = 0.50,
+    double apexHeightMeters = 3.2,
+  }) {
+    final double p = progress.clamp(0.05, 0.92);
+    _expectedFlightDuration = 1.28;
+    final double flightSpan = _expectedFlightDuration * 0.94;
+    airtimeSeconds = p * flightSpan;
+    trickProgress = p;
+    currentAerialTrick = trick;
+    playerY = 0.45 + math.sin(p * math.pi) * apexHeightMeters;
+    playerVy = math.cos(p * math.pi) * 11.8;
+    currentJumpHeightMeters = math.max(currentJumpHeightMeters, playerY);
+    maxJumpHeightMeters = math.max(maxJumpHeightMeters, playerY);
+    _launchStretchTimer = p < 0.14 ? 0.15 : 0.0;
+    animState = p < 0.14
+        ? VivienneSkiAnimState.rampLaunchStretch
+        : VivienneSkiAnimState.airborneCelebration;
+
+    final double smoothT =
+        0.55 * p + 0.45 * (0.5 - 0.5 * math.cos(p * math.pi));
+    if (trick == SkiAerialTrickKind.saut360) {
+      trickSpinAngle = smoothT * 2.0 * math.pi;
+      trickFlipAngle = 0.0;
+    } else if (trick == SkiAerialTrickKind.sautPerilleux) {
+      trickFlipAngle = smoothT * 2.0 * math.pi;
+      trickSpinAngle = 0.0;
+    }
+    jumpsCompleted++;
+    jumpAndMogulPoints += trick.bonusPoints;
+    callouts
+      ..clear()
+      ..add(
+        SkiFloatingCallout(
+          text: '${trick.title} +${trick.bonusPoints}',
+          color: trick == SkiAerialTrickKind.saut360
+              ? const Color(0xFFFFD700)
+              : const Color(0xFFFF4081),
+          life: 1.15,
+          maxLife: 1.40,
+        ),
+      );
+    _spawnPowderBurst(count: 12, upwardVy: 5.2);
+    notifyListeners();
   }
 
   void _updateAnimationState(double dt) {
@@ -971,13 +1170,13 @@ class SkiGameEngine extends ChangeNotifier {
     }
   }
 
-  void _addCallout(String text, Color color) {
+  void _addCallout(String text, Color color, {double duration = 1.05}) {
     callouts.add(
       SkiFloatingCallout(
         text: text,
         color: color,
-        life: 1.05,
-        maxLife: 1.05,
+        life: duration,
+        maxLife: duration,
       ),
     );
     if (callouts.length > 4) {
@@ -1090,7 +1289,12 @@ class SkiGameEngine extends ChangeNotifier {
     speedKmh = _selectedTrack.baseSpeedKmh;
     playerRollRadians = 0.0;
     animState = VivienneSkiAnimState.glidingRearNeutral;
-    currentAerialTrick = SkiAerialTrickKind.victoryVArms;
+    currentAerialTrick = SkiAerialTrickKind.none;
+    trickSpinAngle = 0.0;
+    trickFlipAngle = 0.0;
+    trickProgress = 0.0;
+    _expectedFlightDuration = 1.15;
+    _rampTrickCounter = 0;
     currentAnimScaleX = 1.0;
     currentAnimScaleY = 1.0;
     armRaiseProgress = 0.08;
@@ -1498,7 +1702,7 @@ class SkiGameEngine extends ChangeNotifier {
           id: 'seed_green_2',
           playerName: 'Camille Asnières',
           trackId: SkiTrackId.greenBlossomValley,
-          edition: VivienneSkiEdition.neoBlossom,
+          edition: VivienneSkiEdition.giantDenim,
           score: 4590,
           timeSeconds: 47.8,
           maxJumpMeters: 4.5,
@@ -1547,7 +1751,7 @@ class SkiGameEngine extends ChangeNotifier {
           id: 'seed_blue_3',
           playerName: 'Éléonore Megève',
           trackId: SkiTrackId.blueAsnieresForest,
-          edition: VivienneSkiEdition.neoBlossom,
+          edition: VivienneSkiEdition.speedyV03,
           score: 5490,
           timeSeconds: 63.4,
           maxJumpMeters: 4.8,
@@ -1584,7 +1788,7 @@ class SkiGameEngine extends ChangeNotifier {
           id: 'seed_black_3',
           playerName: 'Henri Val-d\'Isère',
           trackId: SkiTrackId.blackVendomePeaks,
-          edition: VivienneSkiEdition.neoBlossom,
+          edition: VivienneSkiEdition.speedyV03,
           score: 9240,
           timeSeconds: 73.1,
           maxJumpMeters: 6.5,

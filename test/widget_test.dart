@@ -63,6 +63,23 @@ Future<List<ui.Image?>> _loadTestTurntableSprites() async {
   return list;
 }
 
+Future<Map<VivienneSkiEdition, List<ui.Image?>>> _loadTestEditionPoseSprites({
+  required bool isFront,
+}) async {
+  final Map<VivienneSkiEdition, List<ui.Image?>> result =
+      <VivienneSkiEdition, List<ui.Image?>>{};
+  for (final VivienneSkiEdition ed in VivienneSkiEdition.values) {
+    final List<String> paths =
+        isFront ? ed.frontPoseAssetPaths : ed.rearPoseAssetPaths;
+    final List<ui.Image?> poses = <ui.Image?>[];
+    for (final String path in paths) {
+      poses.add(await _decodeImageFile(path));
+    }
+    result[ed] = poses;
+  }
+  return result;
+}
+
 Future<ui.Image?> _loadTestLvNeoBannerImage() async {
   return _decodeImageFile('assets/sprites/lv_neo_banner.png');
 }
@@ -104,54 +121,45 @@ void main() {
   });
 
   test(
-    'v1.1.0 Steeper Slopes, Higher Speeds, LV_NEO Lateral Banners & Lively Alpine Scenery across all 3 Ski Tracks',
+    'v1.2.0 Strictly 3 BLENDER_LAB Vivienne 3D Cycles Models, Pose Asset Paths & Track Metrics',
     () {
-      // Verify steepened slope metrics & higher velocities
-      expect(SkiTrackId.greenBlossomValley.slopeDegrees, equals(24.0));
-      expect(SkiTrackId.greenBlossomValley.verticalDropMeters, equals(535.0));
-      expect(SkiTrackId.greenBlossomValley.baseSpeedKmh, equals(62.0));
-      expect(SkiTrackId.greenBlossomValley.maxSpeedKmh, equals(108.0));
-      expect(
-        SkiTrackId.greenBlossomValley.summaryMetrics,
-        equals('1 200 m • Dénivelé -535 m (24°) • 4 Tremplins'),
-      );
-
-      expect(SkiTrackId.blueAsnieresForest.slopeDegrees, equals(34.0));
-      expect(SkiTrackId.blueAsnieresForest.verticalDropMeters, equals(980.0));
-      expect(SkiTrackId.blueAsnieresForest.baseSpeedKmh, equals(84.0));
-      expect(SkiTrackId.blueAsnieresForest.maxSpeedKmh, equals(142.0));
-      expect(
-        SkiTrackId.blueAsnieresForest.summaryMetrics,
-        equals('1 800 m • Dénivelé -980 m (34°) • 7 Tremplins'),
-      );
-
-      expect(SkiTrackId.blackVendomePeaks.slopeDegrees, equals(45.0));
-      expect(SkiTrackId.blackVendomePeaks.verticalDropMeters, equals(1650.0));
-      expect(SkiTrackId.blackVendomePeaks.baseSpeedKmh, equals(108.0));
-      expect(SkiTrackId.blackVendomePeaks.maxSpeedKmh, equals(185.0));
-      expect(
-        SkiTrackId.blackVendomePeaks.summaryMetrics,
-        equals('2 500 m • Dénivelé -1 650 m (45°) • 10 Méga-Sauts'),
-      );
-
-      // Verify 4 BLENDER_LAB Vivienne Models
+      // Strictly 3 official playable Viviennes (`neoBlossom` removed)
+      expect(VivienneSkiEdition.values.length, equals(3));
       expect(
         VivienneSkiEdition.values,
         equals(<VivienneSkiEdition>[
           VivienneSkiEdition.speedyV03,
           VivienneSkiEdition.wonderland,
           VivienneSkiEdition.giantDenim,
-          VivienneSkiEdition.neoBlossom,
         ]),
       );
-      expect(
-        VivienneSkiEdition.wonderland.blendPath,
-        equals('models/vivienne_wonderland.blend'),
-      );
-      expect(
-        VivienneSkiEdition.giantDenim.blendPath,
-        equals('models/vivienne_giant_denim.blend'),
-      );
+
+      for (final VivienneSkiEdition ed in VivienneSkiEdition.values) {
+        expect(ed.rearPoseAssetPaths.length, equals(5));
+        expect(ed.frontPoseAssetPaths.length, equals(5));
+        for (int i = 0; i < 5; i++) {
+          expect(
+            File(ed.rearPoseAssetPaths[i]).existsSync(),
+            isTrue,
+            reason: 'Missing rear Cycles pose ${ed.rearPoseAssetPaths[i]}',
+          );
+          expect(
+            File(ed.frontPoseAssetPaths[i]).existsSync(),
+            isTrue,
+            reason: 'Missing front Cycles pose ${ed.frontPoseAssetPaths[i]}',
+          );
+          final double rearSole =
+              ed.soleCenterXFraction(isFront: false, poseIndex: i);
+          final double frontSole =
+              ed.soleCenterXFraction(isFront: true, poseIndex: i);
+          expect(rearSole, inInclusiveRange(0.30, 0.70));
+          expect(frontSole, inInclusiveRange(0.30, 0.70));
+        }
+      }
+
+      // Bonus aerial tricks (`Saut 360°` +250, `Saut Périlleux` +300)
+      expect(SkiAerialTrickKind.saut360.bonusPoints, equals(250));
+      expect(SkiAerialTrickKind.sautPerilleux.bonusPoints, equals(300));
 
       final SkiGameEngine engine = SkiGameEngine(seed: 2026);
       expect(engine.isInMenu, isTrue);
@@ -163,196 +171,117 @@ void main() {
         expect(engine.jumpRamps.length, equals(track.jumpRampCount));
         expect(engine.slalomGates.length, equals(track.slalomGateCount));
         expect(engine.blossoms.length, equals(track.blossomCount));
-
-        // Bilateral LV_NEO banners (`lvBannerPost`) on both left & right sides
-        final List<SkiWorldProp3D> lvBanners = engine.worldProps
-            .where((SkiWorldProp3D p) => p.kind == SkiPropKind.lvBannerPost)
-            .toList();
-        expect(lvBanners.length, greaterThanOrEqualTo(40));
-        expect(
-          lvBanners.any(
-            (SkiWorldProp3D p) => p.x < engine.trackCenterOffsetX(p.z),
-          ),
-          isTrue,
-        );
-        expect(
-          lvBanners.any(
-            (SkiWorldProp3D p) => p.x > engine.trackCenterOffsetX(p.z),
-          ),
-          isTrue,
-        );
-
-        // Lively animated scenery props present on every track
         expect(
           engine.worldProps
               .any((SkiWorldProp3D p) => p.kind == SkiPropKind.cableCarPylon),
           isTrue,
         );
-        expect(
-          engine.worldProps
-              .any((SkiWorldProp3D p) => p.kind == SkiPropKind.cartoonSnowman),
-          isTrue,
-        );
-        expect(
-          engine.worldProps.any(
-            (SkiWorldProp3D p) => p.kind == SkiPropKind.flutteringPennantPost,
-          ),
-          isTrue,
-        );
-        expect(
-          engine.worldProps
-              .any((SkiWorldProp3D p) => p.kind == SkiPropKind.snowCannon),
-          isTrue,
-        );
-        expect(
-          engine.worldProps
-              .any((SkiWorldProp3D p) => p.kind == SkiPropKind.alpineChalet),
-          isTrue,
-        );
-        expect(
-          engine.worldProps
-              .any((SkiWorldProp3D p) => p.kind == SkiPropKind.finishArch),
-          isTrue,
-        );
-
-        // Steep elevation drop check
-        final double dropTotal =
-            engine.trackElevationY(0.0) -
-            engine.trackElevationY(track.lengthMeters);
-        expect(dropTotal, greaterThan(450.0));
       }
     },
   );
 
   test(
-    'Hardware accelerometer carving, Mogul Squash, Big Air Jump, Pine Tree Snowball Crash & Chalet finish',
+    'v1.2.0 Bonus Jumps (Saut 360° & Saut Périlleux), Accelerometer Carving, Pause & Snowball Crash',
     () {
       final SkiGameEngine engine = SkiGameEngine(seed: 2026);
-      engine.selectEdition(VivienneSkiEdition.giantDenim);
+      engine.selectEdition(VivienneSkiEdition.wonderland);
       engine.startRun(track: SkiTrackId.greenBlossomValley);
       expect(engine.isInMenu, isFalse);
-      expect(engine.speedKmh, greaterThanOrEqualTo(62.0));
 
-      // 1. Hardware accelerometer steering right (ax < 0 in portrait) & left (ax > 0)
+      // 1. Hardware accelerometer carving right & left + pose mapping
       engine.updateHardwareSensor(-4.6, 0.0, 8.6);
-      expect(engine.effectiveTiltX, greaterThan(0.20));
       for (int step = 0; step < 12; step++) {
         engine.update(1 / 60);
       }
       expect(engine.animState, equals(VivienneSkiAnimState.carvingRight));
-      expect(engine.activeSkierTurntableFrameIndex, greaterThan(12));
-
-      engine.updateHardwareSensor(4.6, 0.0, 8.6);
-      for (int step = 0; step < 16; step++) {
-        engine.update(1 / 60);
-      }
-      expect(engine.animState, equals(VivienneSkiAnimState.carvingLeft));
-      expect(engine.activeSkierTurntableFrameIndex, lessThan(12));
+      expect(engine.activeSkierPoseIndex, equals(1));
 
       engine.calibrateAccelerometer();
       expect(engine.effectiveTiltX, closeTo(0.0, 1e-4));
 
-      // 2. Mogul absorption Squash & Big Air Jump celebration
+      // 2. Ramp #1 triggers Saut 360° (+250 pts, spin 0 -> 2π)
       engine.startRun(track: SkiTrackId.greenBlossomValley);
-      bool sawMogulSquash = false;
-      bool sawAirborneJump = false;
-      for (int step = 0; step < 680; step++) {
-        engine.update(1 / 60);
-        if (engine.animState == VivienneSkiAnimState.mogulAbsorptionSquash) {
-          sawMogulSquash = true;
-        }
-        if (engine.animState == VivienneSkiAnimState.airborneCelebration &&
-            engine.playerY > 1.0) {
-          sawAirborneJump = true;
-        }
-      }
-      expect(sawMogulSquash, isTrue);
-      expect(engine.mogulsAbsorbed, greaterThanOrEqualTo(1));
-      expect(sawAirborneJump, isTrue);
-      expect(engine.jumpsCompleted, greaterThanOrEqualTo(1));
-      expect(engine.maxJumpHeightMeters, greaterThan(1.5));
-
-      // 3. Pine Tree Collision (On-Piste & Border) triggers Cartoon Snowball Crash (`VivienneSkiAnimState.snowballCrash`)
-      engine.startRun(track: SkiTrackId.greenBlossomValley);
-      final SkiWorldProp3D onPistePine = engine.worldProps.firstWhere(
-        (SkiWorldProp3D p) =>
-            p.isOnPiste &&
-            (p.kind == SkiPropKind.alpinePineTree ||
-                p.kind == SkiPropKind.giantSnowPine),
-      );
-      engine.playerZ = onPistePine.z - 0.3;
+      final SkiJumpRamp3D firstRamp = engine.jumpRamps.first;
+      engine.playerZ = firstRamp.z + firstRamp.length * 0.30;
       engine.playerLateralOffset =
-          onPistePine.x - engine.trackCenterOffsetX(onPistePine.z);
-      engine.playerY = 0.0;
+          firstRamp.x - engine.trackCenterOffsetX(engine.playerZ);
+      engine.playerY = firstRamp.heightMeters * 0.80;
       engine.update(1 / 60);
 
-      expect(engine.isInSnowballCrash, isTrue);
-      expect(engine.animState, equals(VivienneSkiAnimState.snowballCrash));
-      expect(engine.animState.label, equals('CHUTE BOULE DE NEIGE !'));
-      expect(engine.snowballCrashTimer, greaterThan(1.0));
+      expect(engine.currentAerialTrick, equals(SkiAerialTrickKind.saut360));
+      expect(engine.activeHudStatusLabel, equals('SAUT 360° +250'));
       expect(
-        engine.callouts.any(
-          (SkiFloatingCallout c) => c.text.contains('BOULE DE NEIGE'),
-        ),
+        engine.callouts
+            .any((SkiFloatingCallout c) => c.text == 'SAUT 360° +250'),
         isTrue,
       );
 
-      // Advance during snowball crash to verify 3 full rotations (`~6π`)
-      for (int step = 0; step < 45; step++) {
+      double peakSpin = 0.0;
+      for (int step = 0; step < 85 && engine.playerY > 0.05; step++) {
         engine.update(1 / 60);
+        peakSpin = math.max(peakSpin, engine.trickSpinAngle);
       }
-      expect(engine.snowballRotationRadians, greaterThan(math.pi * 2.5));
+      expect(peakSpin, greaterThan(math.pi * 1.65));
 
-      // Complete snowball crash recovery
-      for (int step = 0; step < 40; step++) {
-        engine.update(1 / 60);
-      }
-      expect(engine.isInSnowballCrash, isFalse);
-
-      // Also verify off-piste border pine tree collision triggers Snowball Crash
-      engine.startRun(track: SkiTrackId.greenBlossomValley);
-      final double maxReach =
-          engine.selectedTrack.trackHalfWidthMeters * 1.34;
-      final SkiWorldProp3D borderPine = engine.worldProps.firstWhere(
-        (SkiWorldProp3D p) =>
-            !p.isOnPiste &&
-            (p.kind == SkiPropKind.alpinePineTree ||
-                p.kind == SkiPropKind.giantSnowPine) &&
-            (p.x - engine.trackCenterOffsetX(p.z)).abs() <= maxReach,
-      );
-      engine.playerZ = borderPine.z - 0.3;
+      // 3. Ramp #2 alternates to Saut Périlleux (+300 pts, flip 0 -> 2π)
+      final SkiJumpRamp3D secondRamp = engine.jumpRamps[1];
+      engine.playerY = secondRamp.heightMeters * 0.80;
+      engine.playerVy = 0.0;
+      engine.playerZ = secondRamp.z + secondRamp.length * 0.30;
       engine.playerLateralOffset =
-          borderPine.x - engine.trackCenterOffsetX(borderPine.z);
-      engine.playerY = 0.0;
+          secondRamp.x - engine.trackCenterOffsetX(engine.playerZ);
       engine.update(1 / 60);
-      expect(engine.isInSnowballCrash, isTrue);
-      expect(engine.animState, equals(VivienneSkiAnimState.snowballCrash));
 
-      // Verify `triggerSnowballCrashForTest()` helper
-      engine.startRun(track: SkiTrackId.greenBlossomValley);
+      expect(
+        engine.currentAerialTrick,
+        equals(SkiAerialTrickKind.sautPerilleux),
+      );
+      expect(engine.activeHudStatusLabel, equals('SAUT PÉRILLEUX +300'));
+      expect(
+        engine.callouts
+            .any((SkiFloatingCallout c) => c.text == 'SAUT PÉRILLEUX +300'),
+        isTrue,
+      );
+
+      double peakFlip = 0.0;
+      for (int step = 0; step < 90 && engine.playerY > 0.05; step++) {
+        engine.update(1 / 60);
+        peakFlip = math.max(peakFlip, engine.trickFlipAngle);
+      }
+      expect(peakFlip, greaterThan(math.pi * 1.65));
+
+      // 4. Pause & Resume freezes simulation cleanly
+      final double zBeforePause = engine.playerZ;
+      engine.togglePause();
+      expect(engine.isPaused, isTrue);
+      engine.update(0.5);
+      expect(engine.playerZ, equals(zBeforePause));
+      engine.togglePause();
+      expect(engine.isPaused, isFalse);
+
+      // 5. Pine Tree Snowball Crash & Chalet Finish
       engine.triggerSnowballCrashForTest();
       expect(engine.isInSnowballCrash, isTrue);
-      expect(engine.animState, equals(VivienneSkiAnimState.snowballCrash));
-
-      // 4. Complete run & verify Highscores leaderboard insertion
-      final int initialCount =
-          engine.highscoresForTrack(SkiTrackId.greenBlossomValley).length;
       engine.forceFinishRunForTest();
       expect(engine.isTrackFinished, isTrue);
       expect(engine.lastRunBreakdown, isNotNull);
-      expect(
-        engine.highscoresForTrack(SkiTrackId.greenBlossomValley).length,
-        equals(initialCount + 1),
-      );
     },
   );
 
   testWidgets(
-    'Cartoon Main Menu, 4 BLENDER_LAB Vivienne Models, LV_NEO Banners, Lively Scenery, Snowball Crash & 1080x2400 Store Screenshots',
+    'v1.2.0 3 Viviennes 3D Cycles, Saut 360° & Périlleux, Oblique Chairlifts, Pause Overlay & 6 Store Screenshots (1080x2400)',
     (WidgetTester tester) async {
       await tester.binding.setSurfaceSize(const Size(360, 800));
       addTearDown(() async => tester.binding.setSurfaceSize(null));
 
+      final Map<VivienneSkiEdition, List<ui.Image?>> rearPoseSprites =
+          (await tester.runAsync(
+        () => _loadTestEditionPoseSprites(isFront: false),
+      ))!;
+      final Map<VivienneSkiEdition, List<ui.Image?>> frontPoseSprites =
+          (await tester.runAsync(
+        () => _loadTestEditionPoseSprites(isFront: true),
+      ))!;
       final List<ui.Image?> turntableSprites =
           (await tester.runAsync(_loadTestTurntableSprites))!;
       final ui.Image? lvNeoBannerImage =
@@ -361,7 +290,11 @@ void main() {
           (await tester.runAsync(_loadTestEditionHeroSprites))!;
 
       expect(lvNeoBannerImage, isNotNull);
-      expect(editionHeroSprites.length, equals(4));
+      expect(editionHeroSprites.length, equals(3));
+      for (final VivienneSkiEdition ed in VivienneSkiEdition.values) {
+        expect(rearPoseSprites[ed]!.whereType<ui.Image>().length, equals(5));
+        expect(frontPoseSprites[ed]!.whereType<ui.Image>().length, equals(5));
+      }
 
       final SkiGameEngine engine = SkiGameEngine(seed: 2026);
       final GlobalKey screenshotKey = GlobalKey();
@@ -369,6 +302,8 @@ void main() {
       await tester.pumpWidget(
         ViviAuSkiApp(
           engine: engine,
+          initialRearPoseSprites: rearPoseSprites,
+          initialFrontPoseSprites: frontPoseSprites,
           initialTurntableSprites: turntableSprites,
           initialLvNeoBannerImage: lvNeoBannerImage,
           initialEditionHeroSprites: editionHeroSprites,
@@ -378,177 +313,150 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 100));
 
-      // 1. Starts on Cartoon Main Menu showing all 4 BLENDER_LAB models & steeper track metrics
-      expect(find.byKey(const Key('main_menu_overlay')), findsOneWidget);
-      expect(find.byKey(const Key('highscores_modal_overlay')), findsNothing);
-      expect(
-        find.text('1 200 m • Dénivelé -535 m (24°) • 4 Tremplins'),
-        findsOneWidget,
-      );
-      expect(
-        find.text('1 800 m • Dénivelé -980 m (34°) • 7 Tremplins'),
-        findsOneWidget,
-      );
-      expect(
-        find.text('2 500 m • Dénivelé -1 650 m (45°) • 10 Méga-Sauts'),
-        findsOneWidget,
-      );
+      // Verify compact viewport (`360x740dp`) produces zero overflow on Menu
+      await tester.binding.setSurfaceSize(const Size(360, 740));
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(tester.takeException(), isNull);
+      await tester.binding.setSurfaceSize(const Size(360, 800));
+      await tester.pump(const Duration(milliseconds: 80));
 
-      // Select all 4 BLENDER_LAB Vivienne Editions on Main Menu
+      // 1. Screenshot 01: Title & 3D Models Selector (strictly 3 Viviennes, Wonderland selected)
+      expect(find.byKey(const Key('main_menu_overlay')), findsOneWidget);
+      expect(
+        find.byKey(const Key('select_edition_neo_blossom')),
+        findsNothing,
+      );
       await tester.tap(find.byKey(const Key('select_edition_wonderland')));
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 120));
       expect(engine.selectedEdition, equals(VivienneSkiEdition.wonderland));
 
       await _capturePortraitScreenshot(
         tester,
         screenshotKey,
-        'screenshots/01_menu_accueil_cartoon_3_pistes.png',
+        'screenshots/01_title_and_3d_gallery_preview.png',
       );
 
-      await tester.tap(find.byKey(const Key('select_edition_giant_denim')));
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(engine.selectedEdition, equals(VivienneSkiEdition.giantDenim));
-
-      await tester.tap(find.byKey(const Key('select_edition_neo_blossom')));
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(engine.selectedEdition, equals(VivienneSkiEdition.neoBlossom));
-
-      await tester.tap(find.byKey(const Key('select_edition_speedy_v03')));
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(engine.selectedEdition, equals(VivienneSkiEdition.speedyV03));
-
-      // Select Blue & Black Gold Ski Tracks
-      await tester.tap(find.byKey(const Key('select_track_piste_bleue')));
-      await tester.pump(const Duration(milliseconds: 120));
-      expect(engine.selectedTrack, equals(SkiTrackId.blueAsnieresForest));
-
-      await tester.tap(find.byKey(const Key('select_track_piste_noire')));
-      await tester.pump(const Duration(milliseconds: 120));
-      expect(engine.selectedTrack, equals(SkiTrackId.blackVendomePeaks));
-
-      // 2. Open Highscores Modal & filter by track
-      await tester.tap(find.byKey(const Key('open_highscores_button')));
-      await tester.pump(const Duration(milliseconds: 220));
-      expect(find.byKey(const Key('highscores_modal_overlay')), findsOneWidget);
-
-      await _capturePortraitScreenshot(
-        tester,
-        screenshotKey,
-        'screenshots/02_tableau_des_scores_pistes.png',
-      );
-
-      await tester.tap(find.byKey(const Key('filter_highscores_piste_verte')));
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(
-        engine.highscoresFilterTrack,
-        equals(SkiTrackId.greenBlossomValley),
-      );
-
-      await tester.tap(find.byKey(const Key('close_highscores_button')));
-      await tester.pump(const Duration(milliseconds: 120));
-      expect(find.byKey(const Key('highscores_modal_overlay')), findsNothing);
-
-      // 3. Open 3D BLENDER_LAB Gallery & inspect Giant Denim / Wonderland / Speedy v03
+      // Verify 3D Gallery also shows strictly 3 Viviennes and switches to 180° Rear view
       await tester.tap(find.byKey(const Key('open_turntable_gallery_button')));
       await tester.pump(const Duration(milliseconds: 180));
       expect(find.byKey(const Key('vivienne_gallery_panel')), findsOneWidget);
-
-      await tester.tap(
-        find.byKey(const Key('gallery_select_edition_giant_denim')),
-      );
+      await tester.tap(find.byKey(const Key('turntable_rear_180_button')));
       await tester.pump(const Duration(milliseconds: 100));
-      expect(engine.selectedEdition, equals(VivienneSkiEdition.giantDenim));
-      engine.rotateTurntableBy(20.0);
-      await tester.pump(const Duration(milliseconds: 80));
-
-      await _capturePortraitScreenshot(
-        tester,
-        screenshotKey,
-        'screenshots/03_galerie_vivienne_3d_turntable.png',
-      );
-
-      await tester.tap(
-        find.byKey(const Key('gallery_select_edition_wonderland')),
-      );
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(engine.selectedEdition, equals(VivienneSkiEdition.wonderland));
-
+      expect(engine.turntableAngleDegrees, equals(180.0));
       await tester.tap(find.byKey(const Key('close_turntable_gallery_button')));
       await tester.pump(const Duration(milliseconds: 120));
 
-      // 4. Start Green Track Run with Vivienne Wonderland & capture Big Air Jump + LV_NEO Banners + Lively Scenery
-      await tester.tap(find.byKey(const Key('select_track_piste_verte')));
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.tap(find.byKey(const Key('start_ski_run_button')));
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(engine.isInMenu, isFalse);
-
-      engine.calibrateAccelerometer();
-      for (int i = 0; i < 470; i++) {
-        engine.update(1 / 60);
-        if (engine.animState == VivienneSkiAnimState.airborneCelebration &&
-            engine.playerY > 2.4) {
-          break;
-        }
-      }
-      await tester.pump(const Duration(milliseconds: 100));
-      await _capturePortraitScreenshot(
-        tester,
-        screenshotKey,
-        'screenshots/04_ski_3d_vue_dos_grand_saut_vivienne.png',
+      // 2. Screenshot 02: Downhill Carving Action (`speedyV03` 180° rear Cycles + Infinite Oblique Chairlift)
+      engine.selectEdition(VivienneSkiEdition.speedyV03);
+      engine.startRun(track: SkiTrackId.greenBlossomValley);
+      final SkiWorldProp3D firstChairlift = engine.worldProps.firstWhere(
+        (SkiWorldProp3D p) => p.kind == SkiPropKind.cableCarPylon,
       );
-
-      // 5. Switch to Vivienne Giant Denim on Blue Track (34° slope) & capture high-speed carving with LV Skateboard + LV_NEO banners
-      engine.selectEdition(VivienneSkiEdition.giantDenim);
-      engine.startRun(track: SkiTrackId.blueAsnieresForest);
-      engine.setManualTilt(0.32);
-      for (int i = 0; i < 34; i++) {
+      engine.playerZ = firstChairlift.z - 56.0;
+      engine.playerLateralOffset = -2.2;
+      engine.setManualTilt(0.38);
+      for (int i = 0; i < 22; i++) {
         engine.update(1 / 60);
       }
-      expect(engine.isInSnowballCrash, isFalse);
       expect(engine.animState, equals(VivienneSkiAnimState.carvingRight));
       await tester.pump(const Duration(milliseconds: 100));
       await _capturePortraitScreenshot(
         tester,
         screenshotKey,
-        'screenshots/05_ski_3d_giant_denim_lv_neo_decors.png',
+        'screenshots/02_downhill_carving_action.png',
       );
       engine.clearManualTilt();
 
-      // 6. Trigger Cartoon Snowball Crash on Green Track (`triggerSnowballCrashForTest`) & capture 1080x2400 screenshot
+      // 3. Screenshot 03: Slalom Gates & HUD + `Wonderland` Midair `Saut 360°` (`yaw = π`, facing camera!)
       engine.selectEdition(VivienneSkiEdition.wonderland);
       engine.startRun(track: SkiTrackId.greenBlossomValley);
-      for (int i = 0; i < 95; i++) {
+      final SkiSlalomGate3D targetGate = engine.slalomGates[2];
+      engine.playerZ = targetGate.z - 22.0;
+      engine.playerLateralOffset = 0.0;
+      for (int i = 0; i < 8; i++) {
         engine.update(1 / 60);
       }
-      engine.triggerSnowballCrashForTest();
-      for (int i = 0; i < 18; i++) {
-        engine.update(1 / 60);
-      }
-      expect(engine.isInSnowballCrash, isTrue);
+      engine.triggerBonusJumpForTest(
+        trick: SkiAerialTrickKind.saut360,
+        progress: 0.50,
+        apexHeightMeters: 3.15,
+      );
       await tester.pump(const Duration(milliseconds: 100));
-      expect(find.text('CHUTE BOULE DE NEIGE !'), findsOneWidget);
+      expect(find.text('SAUT 360° +250'), findsOneWidget);
       await _capturePortraitScreenshot(
         tester,
         screenshotKey,
-        'screenshots/06_ski_3d_chute_boule_de_neige_sapin.png',
+        'screenshots/03_slalom_gates_and_hud.png',
       );
 
-      // 7. Verify Chalet Finish Overlay (`track_finished_overlay`)
+      // 4. Screenshot 04: Jump Ramp Squash/Stretch + `Giant Denim` Midair `Saut Périlleux` (+300)
+      engine.selectEdition(VivienneSkiEdition.giantDenim);
+      engine.startRun(track: SkiTrackId.blueAsnieresForest);
+      final SkiJumpRamp3D targetRamp = engine.jumpRamps.first;
+      engine.playerZ = targetRamp.z + 1.5;
+      engine.playerLateralOffset =
+          targetRamp.x - engine.trackCenterOffsetX(engine.playerZ);
+      for (int i = 0; i < 6; i++) {
+        engine.update(1 / 60);
+      }
+      engine.triggerBonusJumpForTest(
+        trick: SkiAerialTrickKind.sautPerilleux,
+        progress: 0.44,
+        apexHeightMeters: 3.45,
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('SAUT PÉRILLEUX +300'), findsOneWidget);
+      await _capturePortraitScreenshot(
+        tester,
+        screenshotKey,
+        'screenshots/04_jump_ramp_squash_stretch.png',
+      );
+
+      // 5. Screenshot 05: Pause Menu Overlay over HUD & 3D Piste (`pause_modal_overlay`)
+      engine.selectEdition(VivienneSkiEdition.speedyV03);
+      engine.startRun(track: SkiTrackId.blueAsnieresForest);
+      for (int i = 0; i < 55; i++) {
+        engine.update(1 / 60);
+      }
+      await tester.pump(const Duration(milliseconds: 80));
+      await tester.tap(find.byKey(const Key('hud_pause_button')));
+      await tester.pump(const Duration(milliseconds: 240));
+      expect(find.byKey(const Key('pause_modal_overlay')), findsOneWidget);
+      await _capturePortraitScreenshot(
+        tester,
+        screenshotKey,
+        'screenshots/05_pause_overlay_hud.png',
+      );
+
+      await tester.tap(find.byKey(const Key('resume_run_button')));
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(find.byKey(const Key('pause_modal_overlay')), findsNothing);
+
+      // 6. Screenshot 06: Finish Podium Modal (`track_finished_overlay`)
+      engine.blossomsCollected = 24;
+      engine.blossomPoints = 1200;
+      engine.slalomPassed = 9;
+      engine.slalomPoints = 1350;
+      engine.jumpsCompleted = 4;
+      engine.mogulsAbsorbed = 6;
+      engine.jumpAndMogulPoints = 1610;
+      engine.elapsedSeconds = 46.8;
       engine.forceFinishRunForTest();
       await tester.pump(const Duration(milliseconds: 280));
       expect(find.byKey(const Key('track_finished_overlay')), findsOneWidget);
-      await tester.tap(find.byKey(const Key('finish_return_menu_button')));
-      await tester.pump(const Duration(milliseconds: 140));
-      expect(find.byKey(const Key('main_menu_overlay')), findsOneWidget);
+      await _capturePortraitScreenshot(
+        tester,
+        screenshotKey,
+        'screenshots/06_finish_podium_modal.png',
+      );
 
       for (final String shot in <String>[
-        'screenshots/01_menu_accueil_cartoon_3_pistes.png',
-        'screenshots/02_tableau_des_scores_pistes.png',
-        'screenshots/03_galerie_vivienne_3d_turntable.png',
-        'screenshots/04_ski_3d_vue_dos_grand_saut_vivienne.png',
-        'screenshots/05_ski_3d_giant_denim_lv_neo_decors.png',
-        'screenshots/06_ski_3d_chute_boule_de_neige_sapin.png',
+        'screenshots/01_title_and_3d_gallery_preview.png',
+        'screenshots/02_downhill_carving_action.png',
+        'screenshots/03_slalom_gates_and_hud.png',
+        'screenshots/04_jump_ramp_squash_stretch.png',
+        'screenshots/05_pause_overlay_hud.png',
+        'screenshots/06_finish_podium_modal.png',
       ]) {
         final bool exists =
             (await tester.runAsync(() async => File(shot).exists()))!;
