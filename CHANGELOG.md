@@ -1,5 +1,24 @@
 # Changelog — Vivi au Ski 3D (`cloud.orbital8.vivi_au_ski`)
 
+## [v1.3.0] (`1.3.0+4`) - 2026-11-12
+
+### Added, Changed & Fixed
+- **Moteur de Rendu 3D Volumétrique Complet & Rig Squelettique Articulé 22+ Os (`ORB-70` / `ORB-69` — @Carbon)** :
+  - Création de `lib/painters/vivienne_3d_volumetric_rig.dart` (`Vivienne3DVolumetricRig`, `VivienneSkeletonPose3D`, `Vivienne3DViewport`, `VivienneProjectedBounds`) remplaçant **intégralement** tous les sprites 2D plats du personnage sur la piste, en saut, dans le Menu d'accueil, la Galerie 3D, la Pause et le Podium d'arrivée.
+  - **Maillages 3D fermés triangulés (`ui.Vertices.raw(ui.VertexMode.triangles, ...)`)** fidèles aux générateurs Python `BLENDER_LAB` :
+    * `Vivienne_Head` : ellipsoïde 3D en bois veiné (`rx = 0.45, ry = 0.28, rz = 0.45`, profondeur réelle `0.56 m` en Y), œil droit fleur Monogram 3D en relief + clou or, œil gauche clou cylindrique biseauté or `#FFD700`, oreilles Vachetta à tranche carmin, et occultation 3D naturelle vue de dos.
+    * **4 Pétales 3D volumétriques** (`Petal_Top/Bottom/Left/Right`, `thickness = 0.072`) à faces bombées, **tranche périmétrique biseautée 3D rouge carmin `#8B1E24`** (ou indigo `#1D3557` sur `Giant Denim`), coutures sellier 3D et motifs Monogram étoilés en relief 3D recto/verso.
+    * **Torse & Bassin 3D** (`Pelvis` + `Spine`) et **Jambes, Genoux, Pieds / Sneakers & Skis Paraboliques 3D indépendants** (`Leg_L/R -> Shin_L/R -> Foot_L/R -> Ski_L/R`), incluant les Sneakers 3D complètes (`Giant Denim` : semelle fuchsia `#C9184A`, midsole blanche, empiècements argent et 3 brides framboise).
+    * **Bras, Avant-Bras, Mains & Bâtons de Ski 3D indépendants** (`Shoulder_L/R -> Arm_Upper_L/R -> Arm_Lower_L/R -> Hand_Clasp_L/R -> Ski_Pole_L/R`) à tranches carmin `#8B1E24`, mousquetons or 24K et rondelles étoilées 3D.
+    * **Accessoires 3D volumétriques animés** : Mini Sac Speedy LV 3D (`Speedy_Bag_Bone`), Petit Lapin Blanc 3D + longues oreilles élastiques (`Bunny_Body_Bone` & `Bunny_Ears_Bone`) & Ballon Cœur 3D double-lobe sur tige or (`Wonderland`), Mini Skateboard LV 3D à 2 trucks chromés & **4 roues cylindriques 3D** + Étiquette porte-adresse 3D (`Giant Denim`).
+  - **Éclairage PBR Studio 3 Points + Spéculaire Blinn-Phong + Silhouette Cartoon 3D (*Inverted Hull* `#2B1105`)** avec tri Z par triangle (*Painter's Algorithm*) et élimination des faces cachées.
+- **Vraies Rotations 3D (`yaw`, `pitch`, `roll`) & Animations Continues des Membres (`60–120 FPS`)** :
+  - Suppression totale de `horizSpinScale` (`cos(yaw)`) et de la rotation 2D d'écran (`canvas.rotate(-flipAngle)`).
+  - En **Descente & Carving** : lacet 3D de virage (`yaw = 180° ± 36°`), roulis 3D, flexion asymétrique intérieur/extérieur des genoux, planté de bâtons 3D alterné, ondulation des 4 pétales et pendule 3D des accessoires.
+  - En **`SAUT 360°`** : vraie rotation 3D autour de l'axe vertical révélant tout le profil et la face 3D sans aucun écrasement horizontal, bras levés haut en V 3D et battement de jambes/skis en ciseaux 3D.
+  - En **`SAUT PÉRILLEUX`** : vrai salto arrière 3D (`pitch` `0° -> -360°` autour de l'axe X + perspective latérale `28°`) projetant en vraie 3D les semelles/sneakers, skis, skateboard et corolle.
+  - Intégration de `Vivienne3DViewport` 60 FPS dans le Menu (`main_menu_overlay`), la Galerie 3D interactive (`vivienne_gallery_panel`), l'inspection 3/4-profil (`~58°`) en Pause (`pause_modal_overlay`) et la célébration bras en V sur le Podium (`track_finished_overlay`).
+
 ## [v1.2.0] (`1.2.0+3`) - 2026-11-12
 
 ### Added, Changed & Fixed

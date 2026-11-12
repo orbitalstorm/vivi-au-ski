@@ -177,7 +177,7 @@ class SkiGameEngine extends ChangeNotifier {
   double speedyBagSwingRadians = 0.0;
   double _speedyBagAngularVel = 0.0;
   double scarfWavePhase = 0.0;
-  double ambientTime = 0.0;
+  double ambientTime = 0.55;
 
   static const double snowballCrashDuration = 1.15;
   double snowballCrashTimer = 0.0;

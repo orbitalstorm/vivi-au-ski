@@ -10,6 +10,7 @@ import 'engine/ski_game_engine.dart';
 import 'models/ski_models.dart';
 import 'painters/ski_3d_painter.dart';
 import 'painters/vivi_ski_cartoon_assets.dart';
+import 'painters/vivienne_3d_volumetric_rig.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -340,6 +341,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
   ui.Image? _lvNeoBannerImage;
   final Map<VivienneSkiEdition, ui.Image> _editionHeroSprites =
       <VivienneSkiEdition, ui.Image>{};
+  double _pauseInspectionYawDegrees = 58.0;
 
   @override
   void initState() {
@@ -712,11 +714,8 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
 
   Widget _buildMainMenuOverlay() {
     final VivienneSkiEdition activeEdition = _engine.selectedEdition;
-    final ui.Image? activeHeroSprite = _editionHeroSprites[activeEdition] ??
-        (activeEdition == VivienneSkiEdition.speedyV03 &&
-                _turntableSprites.length > 12
-            ? (_turntableSprites[0] ?? _turntableSprites[12])
-            : null);
+    final double menuPreviewYaw =
+        34.0 + math.sin(_engine.ambientTime * 1.15) * 24.0;
 
     return Container(
       key: const Key('main_menu_overlay'),
@@ -783,10 +782,10 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'DESCENTE ROYALE v1.2 • 3 VIVIENNES 3D CYCLES',
+                        'DESCENTE ROYALE v1.3 • VRAI RENDU 3D VOLUMÉTRIQUE',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 10.2,
+                          fontSize: 9.8,
                           fontWeight: FontWeight.w800,
                           color: Color(0xFFFFF59D),
                         ),
@@ -796,7 +795,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                 ),
                 const SizedBox(height: 7),
 
-                // Live Preview of Selected BLENDER_LAB Vivienne Model + 3 Official Models Selector
+                // Live 60 FPS Real-Time 3D Volumetric Preview + 3 Official BLENDER_LAB Models Selector
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
@@ -815,10 +814,15 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                       Row(
                         children: <Widget>[
                           Container(
-                            width: 64,
-                            height: 64,
+                            width: 68,
+                            height: 68,
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              gradient: const RadialGradient(
+                                colors: <Color>[
+                                  Color(0xFFFFFFFF),
+                                  Color(0xFFB3E5FC),
+                                ],
+                              ),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: const Color(0xFF2B1105),
@@ -834,30 +838,14 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                             ),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(11),
-                              child: activeHeroSprite != null
-                                  ? RawImage(
-                                      image: activeHeroSprite,
-                                      fit: BoxFit.contain,
-                                    )
-                                  : Image.asset(
-                                      activeEdition.heroAssetPath,
-                                      fit: BoxFit.contain,
-                                      errorBuilder: (
-                                        BuildContext context,
-                                        Object error,
-                                        StackTrace? stackTrace,
-                                      ) =>
-                                          Center(
-                                        child: Container(
-                                          width: 28,
-                                          height: 28,
-                                          decoration: BoxDecoration(
-                                            color: activeEdition.petalColor,
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
+                              child: Vivienne3DViewport(
+                                key: const Key('menu_vivienne_3d_viewport'),
+                                edition: activeEdition,
+                                yawDegrees: menuPreviewYaw,
+                                mode: VivienneMotionMode.showcase360,
+                                externalTimeSeconds: _engine.ambientTime,
+                                includeSkisAndPoles: false,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -902,7 +890,6 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                         children: VivienneSkiEdition.values
                             .map((VivienneSkiEdition ed) {
                           final bool selected = _engine.selectedEdition == ed;
-                          final ui.Image? thumbImg = _editionHeroSprites[ed];
                           final String shortLabel = switch (ed) {
                             VivienneSkiEdition.speedyV03 => 'Speedy v03',
                             VivienneSkiEdition.wonderland => 'Wonderland',
@@ -941,26 +928,16 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                                       SizedBox(
                                         width: 30,
                                         height: 30,
-                                        child: thumbImg != null
-                                            ? RawImage(
-                                                image: thumbImg,
-                                                fit: BoxFit.contain,
-                                              )
-                                            : Image.asset(
-                                                ed.heroAssetPath,
-                                                fit: BoxFit.contain,
-                                                errorBuilder: (
-                                                  BuildContext context,
-                                                  Object error,
-                                                  StackTrace? stackTrace,
-                                                ) =>
-                                                    DecoratedBox(
-                                                  decoration: BoxDecoration(
-                                                    color: ed.petalColor,
-                                                    shape: BoxShape.circle,
-                                                  ),
-                                                ),
-                                              ),
+                                        child: Vivienne3DViewport(
+                                          edition: ed,
+                                          yawDegrees: 32.0,
+                                          mode: VivienneMotionMode.showcase360,
+                                          externalTimeSeconds:
+                                              _engine.ambientTime,
+                                          animate: false,
+                                          includeSkisAndPoles: false,
+                                          drawStudioShadow: false,
+                                        ),
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
@@ -1915,25 +1892,6 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
 
   Widget _buildTurntableGalleryOverlay() {
     final VivienneSkiEdition activeEdition = _engine.selectedEdition;
-    final int idx = _engine.turntableFrameIndex;
-    final ui.Image? frameImage =
-        (idx >= 0 && idx < _turntableSprites.length)
-            ? _turntableSprites[idx]
-            : null;
-    final double yawRad = _engine.turntableAngleDegrees * math.pi / 180.0;
-    final double cosYaw = math.cos(yawRad);
-    final bool showRearSide = cosYaw < 0.0;
-    final ui.Image? editionSideImage = showRearSide
-        ? (_rearPoseSprites[activeEdition]?[1] ??
-            _editionHeroSprites[activeEdition])
-        : (_editionHeroSprites[activeEdition] ??
-            _frontPoseSprites[activeEdition]?[1]);
-    final String editionSideAssetPath = showRearSide
-        ? activeEdition.rearPoseAssetPaths[1]
-        : activeEdition.heroAssetPath;
-    final bool useTurntableFrames =
-        activeEdition == VivienneSkiEdition.speedyV03;
-    final double horizSpinScale = math.max(0.32, cosYaw.abs());
 
     return Container(
       key: const Key('vivienne_gallery_panel'),
@@ -1976,9 +1934,9 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                       const SizedBox(width: 8),
                       const Expanded(
                         child: Text(
-                          'GALERIE BLENDER_LAB (3D)',
+                          'GALERIE 3D VOLUMÉTRIQUE',
                           style: TextStyle(
-                            fontSize: 16.5,
+                            fontSize: 16.0,
                             fontWeight: FontWeight.w900,
                             color: Color(0xFF2B1105),
                           ),
@@ -2056,95 +2014,96 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                   ),
                   const SizedBox(height: 8),
 
-                  GestureDetector(
-                    onHorizontalDragUpdate: (DragUpdateDetails d) {
-                      _engine.rotateTurntableBy(d.delta.dx * 1.2);
-                    },
-                    child: Container(
-                      height: 220,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        gradient: const RadialGradient(
-                          colors: <Color>[Color(0xFFFFFFFF), Color(0xFFB3E5FC)],
-                        ),
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(
-                          color: const Color(0xFF2B1105),
-                          width: 2.4,
-                        ),
+                  Container(
+                    height: 224,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      gradient: const RadialGradient(
+                        colors: <Color>[Color(0xFFFFFFFF), Color(0xFFB3E5FC)],
                       ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: <Widget>[
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(12, 26, 12, 10),
-                            child: useTurntableFrames
-                                ? (frameImage != null
-                                    ? RawImage(
-                                        image: frameImage,
-                                        fit: BoxFit.contain,
-                                      )
-                                    : Image.asset(
-                                        VivienneTurntableSpec.assetPathForIndex(
-                                          idx,
-                                        ),
-                                        fit: BoxFit.contain,
-                                      ))
-                                : Transform(
-                                    alignment: Alignment.center,
-                                    transform: Matrix4.diagonal3Values(
-                                      horizSpinScale,
-                                      1.0,
-                                      1.0,
-                                    ),
-                                    child: editionSideImage != null
-                                        ? RawImage(
-                                            image: editionSideImage,
-                                            fit: BoxFit.contain,
-                                          )
-                                        : Image.asset(
-                                            editionSideAssetPath,
-                                            fit: BoxFit.contain,
-                                          ),
-                                  ),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(
+                        color: const Color(0xFF2B1105),
+                        width: 2.4,
+                      ),
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: <Widget>[
+                        Positioned.fill(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(8, 22, 8, 4),
+                            child: Vivienne3DViewport(
+                              key: const Key('gallery_vivienne_3d_viewport'),
+                              edition: activeEdition,
+                              yawDegrees: _engine.turntableAngleDegrees,
+                              mode: VivienneMotionMode.showcase360,
+                              externalTimeSeconds: _engine.ambientTime,
+                              includeSkisAndPoles: true,
+                              onHorizontalDragYawDelta: (double delta) {
+                                _engine.rotateTurntableBy(delta);
+                              },
+                            ),
                           ),
-                          Positioned(
-                            top: 7,
-                            left: 10,
-                            right: 10,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: <Widget>[
-                                Flexible(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 3,
+                        ),
+                        Positioned(
+                          top: 7,
+                          left: 10,
+                          right: 10,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: <Widget>[
+                              Flexible(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1638E8),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: const Color(0xFFFFD700),
+                                      width: 1.4,
                                     ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF1638E8),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: const Color(0xFFFFD700),
-                                        width: 1.4,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      activeEdition.blendPath,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.w900,
-                                        color: Colors.white,
-                                      ),
+                                  ),
+                                  child: Text(
+                                    '${activeEdition.blendPath} • 22 OS 3D',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.white,
                                     ),
                                   ),
                                 ),
-                              ],
-                            ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFD700),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(0xFF2B1105),
+                                    width: 1.4,
+                                  ),
+                                ),
+                                child: Text(
+                                  '${_engine.turntableAngleDegrees.round()}°',
+                                  style: const TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF2B1105),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -2169,10 +2128,10 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    'Glissez ou inclinez le téléphone pour inspecter (${activeEdition.blendPath})',
+                    'Glissez sur 360° ou inclinez le téléphone : volume 3D complet & membres animés',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      fontSize: 10.2,
+                      fontSize: 10.0,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF5D4037),
                     ),
@@ -2252,13 +2211,12 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
   }
 
   // ---------------------------------------------------------------------------
-  // In-Run Pause Modal (`pause_modal_overlay`)
+  // In-Run Pause Modal (`pause_modal_overlay`) with 3/4-Profile (~60°) 3D Inspection
   // ---------------------------------------------------------------------------
 
   Widget _buildPauseOverlay() {
     final SkiTrackId track = _engine.selectedTrack;
     final VivienneSkiEdition ed = _engine.selectedEdition;
-    final ui.Image? heroImg = _editionHeroSprites[ed] ?? _rearPoseSprites[ed]?[1];
 
     return Container(
       key: const Key('pause_modal_overlay'),
@@ -2273,7 +2231,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
             return Transform.scale(scale: scale, child: child);
           },
           child: Container(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            padding: const EdgeInsets.fromLTRB(15, 8, 15, 15),
             decoration: BoxDecoration(
               color: const Color(0xFFFFF8E7),
               borderRadius: BorderRadius.circular(28),
@@ -2295,63 +2253,109 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                   const Text(
                     'COURSE EN PAUSE',
                     style: TextStyle(
-                      fontSize: 21,
+                      fontSize: 20,
                       fontWeight: FontWeight.w900,
                       color: Color(0xFF2B1105),
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   Text(
                     '${track.title} • ${ed.name}',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      fontSize: 11.8,
+                      fontSize: 11.4,
                       fontWeight: FontWeight.w800,
                       color: Color(0xFF1638E8),
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
+
+                  // Interactive 3/4-Profile (~60°) 3D Volumetric Inspection Stage
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    height: 158,
+                    width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
+                      gradient: const RadialGradient(
+                        colors: <Color>[Color(0xFFFFFFFF), Color(0xFFB3E5FC)],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: const Color(0xFF2B1105),
-                        width: 2.0,
+                        width: 2.2,
                       ),
                     ),
-                    child: Row(
+                    child: Stack(
                       children: <Widget>[
-                        SizedBox(
-                          width: 64,
-                          height: 64,
-                          child: heroImg != null
-                              ? RawImage(image: heroImg, fit: BoxFit.contain)
-                              : Image.asset(
-                                  ed.heroAssetPath,
-                                  fit: BoxFit.contain,
-                                ),
+                        Positioned.fill(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(8, 22, 8, 4),
+                            child: Vivienne3DViewport(
+                              key: const Key('pause_vivienne_3d_viewport'),
+                              edition: ed,
+                              yawDegrees: _pauseInspectionYawDegrees,
+                              mode: VivienneMotionMode.pauseInspection,
+                              externalTimeSeconds:
+                                  _engine.ambientTime + _engine.elapsedSeconds,
+                              includeSkisAndPoles: true,
+                              onHorizontalDragYawDelta: (double delta) {
+                                setState(() {
+                                  _pauseInspectionYawDegrees =
+                                      ((_pauseInspectionYawDegrees + delta) %
+                                                  360.0 +
+                                              360.0) %
+                                          360.0;
+                                });
+                              },
+                            ),
+                          ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
+                        Positioned(
+                          top: 6,
+                          left: 8,
+                          right: 8,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: <Widget>[
-                              _buildScoreDetailRow(
-                                'Score en cours',
-                                '${_engine.liveScore} pts',
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2.5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1638E8),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(0xFFFFD700),
+                                    width: 1.3,
+                                  ),
+                                ),
+                                child: Text(
+                                  'INSPECTION 3D • ${_pauseInspectionYawDegrees.round()}° (3/4 PROFIL)',
+                                  style: const TextStyle(
+                                    fontSize: 9.0,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ),
-                              _buildScoreDetailRow(
-                                'Progression piste',
-                                '${_engine.playerZ.round()} / ${track.lengthMeters.round()} m',
-                              ),
-                              _buildScoreDetailRow(
-                                'Fleurs Blossom',
-                                '${_engine.blossomsCollected} fl.',
-                              ),
-                              _buildScoreDetailRow(
-                                'Vitesse actuelle',
-                                '${_engine.speedKmh.round()} km/h',
+                              const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  Icon(
+                                    Icons.threesixty_rounded,
+                                    size: 13,
+                                    color: Color(0xFF2B1105),
+                                  ),
+                                  SizedBox(width: 2),
+                                  Text(
+                                    '360°',
+                                    style: TextStyle(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF2B1105),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -2359,7 +2363,39 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
+
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: const Color(0xFF2B1105),
+                        width: 2.0,
+                      ),
+                    ),
+                    child: Column(
+                      children: <Widget>[
+                        _buildScoreDetailRow(
+                          'Score en cours',
+                          '${_engine.liveScore} pts',
+                        ),
+                        _buildScoreDetailRow(
+                          'Progression piste',
+                          '${_engine.playerZ.round()} / ${track.lengthMeters.round()} m',
+                        ),
+                        _buildScoreDetailRow(
+                          'Fleurs Blossom • Vitesse',
+                          '${_engine.blossomsCollected} fl. • ${_engine.speedKmh.round()} km/h',
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
                     child: JuicySki3DButton(
@@ -2468,26 +2504,66 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                   const Text(
                     'ARRIVÉE AU CHALET !',
                     style: TextStyle(
-                      fontSize: 21,
+                      fontSize: 20,
                       fontWeight: FontWeight.w900,
                       color: Color(0xFF2B1105),
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List<Widget>.generate(3, (int idx) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Opacity(
-                          opacity: idx < stars ? 1.0 : 0.25,
-                          child: const SkiCartoonEmblemBadge(
-                            kind: SkiCartoonEmblemKind.jumpTrickStar,
-                            size: 36,
+
+                  // 3D Volumetric Podium Celebration Stage (Arms Raised in V!)
+                  Container(
+                    height: 122,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      gradient: const RadialGradient(
+                        colors: <Color>[Color(0xFFFFFFFF), Color(0xFFFFECB3)],
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: const Color(0xFF2B1105),
+                        width: 2.2,
+                      ),
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: <Widget>[
+                        Positioned.fill(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Vivienne3DViewport(
+                              key: const Key('podium_vivienne_3d_viewport'),
+                              edition: _engine.selectedEdition,
+                              yawDegrees: 28.0,
+                              mode: VivienneMotionMode.podiumCelebration,
+                              externalTimeSeconds:
+                                  _engine.ambientTime + _engine.elapsedSeconds,
+                              includeSkisAndPoles: true,
+                            ),
                           ),
                         ),
-                      );
-                    }),
+                        Positioned(
+                          top: 6,
+                          right: 8,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: List<Widget>.generate(3, (int idx) {
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 2),
+                                child: Opacity(
+                                  opacity: idx < stars ? 1.0 : 0.25,
+                                  child: const SkiCartoonEmblemBadge(
+                                    kind: SkiCartoonEmblemKind.jumpTrickStar,
+                                    size: 24,
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Container(

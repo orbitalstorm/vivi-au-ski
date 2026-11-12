@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vivi_au_ski/engine/ski_game_engine.dart';
 import 'package:vivi_au_ski/main.dart';
 import 'package:vivi_au_ski/models/ski_models.dart';
+import 'package:vivi_au_ski/painters/vivienne_3d_volumetric_rig.dart';
 
 Future<void> _loadRealFlutterFonts() async {
   final String flutterRoot =
@@ -268,8 +269,173 @@ void main() {
     },
   );
 
+  test(
+    'v1.3.0 22-Bone Skeletal Articulation & True 3D Volumetric Thickness at Profile (90°) and 3/4 (60°)',
+    () {
+      const List<String> requiredAnimatedBones = <String>[
+        'Leg_L',
+        'Leg_R',
+        'Foot_L',
+        'Foot_R',
+        'Arm_Upper_L',
+        'Arm_Upper_R',
+        'Arm_Lower_L',
+        'Arm_Lower_R',
+        'Head',
+        'Petal_Top',
+        'Petal_Bottom',
+        'Petal_Left',
+        'Petal_Right',
+        'Speedy_Bag_Bone',
+      ];
+
+      // 1. Verify every required bone exists and animates independently over time
+      final VivienneSkeletonPose3D poseT0 = VivienneSkeletonPose3D.evaluate(
+        edition: VivienneSkiEdition.speedyV03,
+        timeSeconds: 0.15,
+        mode: VivienneMotionMode.skiRun,
+        animState: VivienneSkiAnimState.carvingRight,
+        carveTilt: 0.55,
+      );
+      final VivienneSkeletonPose3D poseT1 = VivienneSkeletonPose3D.evaluate(
+        edition: VivienneSkiEdition.speedyV03,
+        timeSeconds: 0.58,
+        mode: VivienneMotionMode.skiRun,
+        animState: VivienneSkiAnimState.carvingRight,
+        carveTilt: 0.55,
+      );
+
+      for (final String boneName in requiredAnimatedBones) {
+        final VivienneBoneState3D? b0 = poseT0.boneByName(boneName);
+        final VivienneBoneState3D? b1 = poseT1.boneByName(boneName);
+        expect(b0, isNotNull, reason: 'Missing bone $boneName at t0');
+        expect(b1, isNotNull, reason: 'Missing bone $boneName at t1');
+
+        final double rotDelta = (b1!.localRx - b0!.localRx).abs() +
+            (b1.localRy - b0.localRy).abs() +
+            (b1.localRz - b0.localRz).abs();
+        final double worldProbeDelta = b1.worldMatrix
+            .transformPoint(b1.bone.restPivot + const Vec3(0.08, -0.14, 0.12))
+            .distanceTo(
+              b0.worldMatrix.transformPoint(
+                b0.bone.restPivot + const Vec3(0.08, -0.14, 0.12),
+              ),
+            );
+        expect(
+          rotDelta + worldProbeDelta,
+          greaterThan(0.015),
+          reason: 'Bone $boneName should animate continuously between frames',
+        );
+      }
+
+      // Left & Right legs and arms articulate independently (asymmetric / opposing!)
+      expect(
+        (poseT0.boneByName('Leg_L')!.localRx -
+                poseT0.boneByName('Leg_R')!.localRx)
+            .abs(),
+        greaterThan(0.08),
+      );
+      expect(
+        (poseT0.boneByName('Arm_Upper_L')!.localRx -
+                poseT0.boneByName('Arm_Upper_R')!.localRx)
+            .abs(),
+        greaterThan(0.10),
+      );
+
+      // 2. Verify projected 3D mesh width NEVER collapses by `cos(yaw)` at 90° (profile) & 60° (3/4)!
+      for (final VivienneSkiEdition ed in VivienneSkiEdition.values) {
+        final VivienneSkeletonPose3D frontPose =
+            VivienneSkeletonPose3D.evaluate(
+          edition: ed,
+          timeSeconds: 0.45,
+          mode: VivienneMotionMode.skiRun,
+          aerialTrick: SkiAerialTrickKind.saut360,
+          isAirborne: true,
+          yawDegrees: 0.0,
+          trickProgress: 0.50,
+        );
+        final VivienneSkeletonPose3D threeQuarterPose =
+            VivienneSkeletonPose3D.evaluate(
+          edition: ed,
+          timeSeconds: 0.45,
+          mode: VivienneMotionMode.skiRun,
+          aerialTrick: SkiAerialTrickKind.saut360,
+          isAirborne: true,
+          yawDegrees: 60.0,
+          trickProgress: 0.50,
+        );
+        final VivienneSkeletonPose3D profilePose =
+            VivienneSkeletonPose3D.evaluate(
+          edition: ed,
+          timeSeconds: 0.45,
+          mode: VivienneMotionMode.skiRun,
+          aerialTrick: SkiAerialTrickKind.saut360,
+          isAirborne: true,
+          yawDegrees: 90.0,
+          trickProgress: 0.50,
+        );
+
+        // Check both without skis (pure figurine body + scissor legs + head 0.56m depth) AND with skis!
+        final VivienneProjectedBounds frontBody =
+            Vivienne3DVolumetricRig.computeProjectedBounds(
+          edition: ed,
+          pose: frontPose,
+          soleAnchorScreen: const Offset(180, 400),
+          pixelsPerMeter: 100.0,
+          includeSkisAndPoles: false,
+        );
+        final VivienneProjectedBounds threeQuarterBody =
+            Vivienne3DVolumetricRig.computeProjectedBounds(
+          edition: ed,
+          pose: threeQuarterPose,
+          soleAnchorScreen: const Offset(180, 400),
+          pixelsPerMeter: 100.0,
+          includeSkisAndPoles: false,
+        );
+        final VivienneProjectedBounds profileBody =
+            Vivienne3DVolumetricRig.computeProjectedBounds(
+          edition: ed,
+          pose: profilePose,
+          soleAnchorScreen: const Offset(180, 400),
+          pixelsPerMeter: 100.0,
+          includeSkisAndPoles: false,
+        );
+        final VivienneProjectedBounds profileWithSkis =
+            Vivienne3DVolumetricRig.computeProjectedBounds(
+          edition: ed,
+          pose: profilePose,
+          soleAnchorScreen: const Offset(180, 400),
+          pixelsPerMeter: 100.0,
+          includeSkisAndPoles: true,
+        );
+
+        expect(frontBody.renderedTriangleCount, greaterThan(1200));
+        // A flat sprite with `cos(90°)` collapses to 0 (or fake 0.28 clamp);
+        // our true 3D ellipsoid head (0.56m Y-depth) + 3D scissor legs + V-arms spans > 0.72m (> 72px at 100px/m)!
+        expect(
+          profileBody.boundingBox.width,
+          greaterThan(72.0),
+          reason:
+              'Profile (yaw=90°) 3D body width for $ed must preserve full volumetric depth',
+        );
+        expect(
+          threeQuarterBody.boundingBox.width,
+          greaterThan(frontBody.boundingBox.width * 0.62),
+          reason:
+              '3/4 view (yaw=60°) 3D width for $ed must exceed flat cos(60°)=0.50 foreshortening',
+        );
+        expect(
+          profileWithSkis.boundingBox.width,
+          greaterThan(135.0),
+          reason:
+              'Profile (yaw=90°) with 3D skis & scissor legs must span > 1.35m in depth',
+        );
+      }
+    },
+  );
+
   testWidgets(
-    'v1.2.0 3 Viviennes 3D Cycles, Saut 360° & Périlleux, Oblique Chairlifts, Pause Overlay & 6 Store Screenshots (1080x2400)',
+    'v1.3.0 3 Viviennes 3D Volumetric Rig, Saut 360° & Périlleux 3D, Pause 3D Inspection & 6 Store Screenshots (1080x2400)',
     (WidgetTester tester) async {
       await tester.binding.setSurfaceSize(const Size(360, 800));
       addTearDown(() async => tester.binding.setSurfaceSize(null));
@@ -346,15 +512,15 @@ void main() {
       await tester.tap(find.byKey(const Key('close_turntable_gallery_button')));
       await tester.pump(const Duration(milliseconds: 120));
 
-      // 2. Screenshot 02: Downhill Carving Action (`speedyV03` 180° rear Cycles + Infinite Oblique Chairlift)
+      // 2. Screenshot 02: Downhill 3D Carving Action (`speedyV03` 3D yaw/roll, asymmetric leg flexion, poles & swinging Speedy bag)
       engine.selectEdition(VivienneSkiEdition.speedyV03);
       engine.startRun(track: SkiTrackId.greenBlossomValley);
       final SkiWorldProp3D firstChairlift = engine.worldProps.firstWhere(
         (SkiWorldProp3D p) => p.kind == SkiPropKind.cableCarPylon,
       );
       engine.playerZ = firstChairlift.z - 48.0;
-      engine.playerLateralOffset = -2.2;
-      engine.setManualTilt(0.38);
+      engine.playerLateralOffset = -3.4;
+      engine.setManualTilt(0.72);
       for (int i = 0; i < 22; i++) {
         engine.update(1 / 60);
       }
@@ -367,7 +533,8 @@ void main() {
       );
       engine.clearManualTilt();
 
-      // 3. Screenshot 03: Slalom Gates & HUD + `Wonderland` Midair `Saut 360°` (`yaw = π`, facing camera!)
+      // 3. Screenshot 03: `Wonderland` Midair `SAUT 360° +250` at 3/4-Front (`yaw ≈ 38°` from front!)
+      // Clearly revealing 3D wooden head volume, red Monogram petal edges, 3D bunny, 3D heart balloon, V-arms & 3D scissor legs!
       engine.selectEdition(VivienneSkiEdition.wonderland);
       engine.startRun(track: SkiTrackId.greenBlossomValley);
       final SkiSlalomGate3D targetGate = engine.slalomGates[2];
@@ -378,7 +545,7 @@ void main() {
       }
       engine.triggerBonusJumpForTest(
         trick: SkiAerialTrickKind.saut360,
-        progress: 0.50,
+        progress: 0.415,
         apexHeightMeters: 3.15,
       );
       await tester.pump(const Duration(milliseconds: 100));
@@ -389,7 +556,7 @@ void main() {
         'screenshots/03_slalom_gates_and_hud.png',
       );
 
-      // 4. Screenshot 04: Jump Ramp Squash/Stretch + `Giant Denim` Midair `Saut Périlleux` (+300)
+      // 4. Screenshot 04: `Giant Denim` Midair `SAUT PÉRILLEUX +300` in True 3D Pitch Backflip + Lateral Perspective!
       engine.selectEdition(VivienneSkiEdition.giantDenim);
       engine.startRun(track: SkiTrackId.blueAsnieresForest);
       final SkiJumpRamp3D targetRamp = engine.jumpRamps.first;
@@ -401,7 +568,7 @@ void main() {
       }
       engine.triggerBonusJumpForTest(
         trick: SkiAerialTrickKind.sautPerilleux,
-        progress: 0.44,
+        progress: 0.46,
         apexHeightMeters: 3.45,
       );
       await tester.pump(const Duration(milliseconds: 100));

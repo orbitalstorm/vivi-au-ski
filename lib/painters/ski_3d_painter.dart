@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../engine/ski_game_engine.dart';
 import '../models/ski_models.dart';
+import 'vivienne_3d_volumetric_rig.dart';
 
 enum _DepthActorKind {
   worldProp,
@@ -2315,158 +2316,45 @@ class Ski3DPainter extends CustomPainter {
             const Color(0xFF14283C).withValues(alpha: 0.34 * airAttenuation),
     );
 
-    final int poseIdx = engine.activeSkierPoseIndex.clamp(0, 4);
     final SkiAerialTrickKind trick =
         isAirborne ? engine.currentAerialTrick : SkiAerialTrickKind.none;
 
+    // 4.2 Real-Time 3D Volumetric & 22-Bone Skeletal Vivienne Renderer (v1.3.0)
+    // Zero 2D flat sprite squishing (`horizSpinScale` removed) and zero 2D canvas flip!
     canvas.save();
     canvas.translate(skierPt.x, skierPt.y);
-    canvas.rotate(engine.playerRollRadians * 0.78);
 
     if (trick == SkiAerialTrickKind.sautPerilleux) {
-      // Bonus Somersault / Backflip (`0 -> 2π`) around Vivienne's center of mass
-      final double flipAngle = engine.trickFlipAngle;
-      final double flipProgress = engine.trickProgress;
-      final bool useFront = flipProgress > 0.25 && flipProgress < 0.75;
       final Offset pivot = Offset(0, -s * 1.78);
-
-      _paintSomersaultFlipTrail(canvas, s, pivot, flipAngle, flipProgress);
-
-      canvas.save();
-      canvas.translate(pivot.dx, pivot.dy);
-      canvas.rotate(-flipAngle);
-      canvas.translate(-pivot.dx, -pivot.dy);
-
-      _paintParabolicSkis3D(canvas, s, edition, isAirborne);
-      _paintVivienneCyclesPoseSprite(
+      _paintSomersaultFlipTrail(
         canvas,
         s,
-        edition,
-        poseIndex: poseIdx,
-        isFront: useFront,
-        horizSpinScale: 1.0,
+        pivot,
+        engine.trickFlipAngle,
+        engine.trickProgress,
       );
-      canvas.restore();
+      Vivienne3DVolumetricRig.paintSkierOnSlope(
+        canvas: canvas,
+        engine: engine,
+        soleAnchorScreen: Offset.zero,
+        unitScalePx: s,
+      );
     } else if (trick == SkiAerialTrickKind.saut360) {
-      // Bonus 360° Helicopter Spin (`0 -> 2π` Y-yaw) switching Rear <-> Front Cycles poses!
       final double yaw = engine.trickSpinAngle;
-      final double cosYaw = math.cos(yaw);
-      final bool useFront = cosYaw < 0.0;
-      final double horizScale = math.max(0.28, cosYaw.abs());
-
       _paintSpin360Halo(canvas, s, yaw, isFrontHalf: false);
-      _paintParabolicSkis3D(canvas, s, edition, isAirborne, spinYaw: yaw);
-      _paintVivienneCyclesPoseSprite(
-        canvas,
-        s,
-        edition,
-        poseIndex: poseIdx,
-        isFront: useFront,
-        horizSpinScale: horizScale,
+      Vivienne3DVolumetricRig.paintSkierOnSlope(
+        canvas: canvas,
+        engine: engine,
+        soleAnchorScreen: Offset.zero,
+        unitScalePx: s,
       );
       _paintSpin360Halo(canvas, s, yaw, isFrontHalf: true);
     } else {
-      // Pure 180° 3D Cycles Rear View (`pose_1..5`) anchored onto 3D Parabolic Skis
-      _paintParabolicSkis3D(canvas, s, edition, isAirborne);
-      _paintVivienneCyclesPoseSprite(
-        canvas,
-        s,
-        edition,
-        poseIndex: poseIdx,
-        isFront: false,
-        horizSpinScale: 1.0,
-      );
-    }
-
-    canvas.restore();
-  }
-
-  ui.Image? _resolveSkierCyclesSprite(
-    VivienneSkiEdition edition, {
-    required bool isFront,
-    required int poseIndex,
-  }) {
-    final List<ui.Image?>? primaryList =
-        isFront ? frontPoseSprites[edition] : rearPoseSprites[edition];
-    if (primaryList != null &&
-        poseIndex >= 0 &&
-        poseIndex < primaryList.length &&
-        primaryList[poseIndex] != null) {
-      return primaryList[poseIndex];
-    }
-    if (primaryList != null) {
-      for (final ui.Image? candidate in primaryList) {
-        if (candidate != null) return candidate;
-      }
-    }
-    final ui.Image? hero = editionHeroSprites[edition];
-    if (hero != null) return hero;
-    if (edition == VivienneSkiEdition.speedyV03 &&
-        turntableSprites.isNotEmpty) {
-      final int fallbackIdx = isFront ? 0 : (12 % turntableSprites.length);
-      return turntableSprites[fallbackIdx];
-    }
-    return null;
-  }
-
-  void _paintVivienneCyclesPoseSprite(
-    Canvas canvas,
-    double s,
-    VivienneSkiEdition edition, {
-    required int poseIndex,
-    required bool isFront,
-    required double horizSpinScale,
-  }) {
-    final ui.Image? sprite = _resolveSkierCyclesSprite(
-      edition,
-      isFront: isFront,
-      poseIndex: poseIndex,
-    );
-
-    // Subtle micro-elastic springiness around ski soles (`y = s * 0.04`) without distorting Cycles proportions
-    final double microScaleX =
-        (1.0 + (engine.currentAnimScaleX - 1.0) * 0.26) * horizSpinScale;
-    final double microScaleY = 1.0 + (engine.currentAnimScaleY - 1.0) * 0.26;
-
-    canvas.save();
-    canvas.translate(0, s * 0.04);
-    canvas.scale(microScaleX, microScaleY);
-
-    if (sprite != null) {
-      // Proportional 1:1 pixel scale calibrated to the 385px neutral Cycles render
-      final double pxScale = (s * 3.85) / 385.0;
-      final double dstW = sprite.width * pxScale;
-      final double dstH = sprite.height * pxScale;
-      final double soleFrac = edition.soleCenterXFraction(
-        isFront: isFront,
-        poseIndex: poseIndex,
-      );
-
-      final Rect src = Rect.fromLTWH(
-        0,
-        0,
-        sprite.width.toDouble(),
-        sprite.height.toDouble(),
-      );
-      final Rect dst = Rect.fromLTWH(
-        -dstW * soleFrac,
-        -dstH,
-        dstW,
-        dstH,
-      );
-      canvas.drawImageRect(
-        sprite,
-        src,
-        dst,
-        Paint()..filterQuality = FilterQuality.medium,
-      );
-    } else {
-      // Minimal headless-test silhouette fallback when asset bundle is omitted
-      final double fallbackR = s * 1.15;
-      canvas.drawCircle(
-        Offset(0, -s * 2.0),
-        fallbackR,
-        Paint()..color = edition.petalColor,
+      Vivienne3DVolumetricRig.paintSkierOnSlope(
+        canvas: canvas,
+        engine: engine,
+        soleAnchorScreen: Offset.zero,
+        unitScalePx: s,
       );
     }
 
@@ -2891,83 +2779,6 @@ class Ski3DPainter extends CustomPainter {
     }
 
     canvas.restore();
-  }
-
-  void _paintParabolicSkis3D(
-    Canvas canvas,
-    double s,
-    VivienneSkiEdition edition,
-    bool isAirborne, {
-    double spinYaw = 0.0,
-  }) {
-    final SkiAerialTrickKind trick = engine.currentAerialTrick;
-    double leftSkiAngle = 0.06 + engine.playerRollRadians * 0.22;
-    double rightSkiAngle = -0.06 + engine.playerRollRadians * 0.22;
-    double stanceHalf = s * 0.24;
-
-    if (isAirborne && trick == SkiAerialTrickKind.grandApexSpread) {
-      leftSkiAngle = -0.22;
-      rightSkiAngle = 0.22;
-      stanceHalf = s * 0.34;
-    }
-
-    final double cosYaw = math.cos(spinYaw);
-    final double sinYaw = math.sin(spinYaw);
-    final double yawTwist = sinYaw * 0.55;
-
-    for (final (double baseX, double angle) in <(double, double)>[
-      (-stanceHalf, leftSkiAngle + yawTwist),
-      (stanceHalf, rightSkiAngle + yawTwist),
-    ]) {
-      final double xPos = baseX * cosYaw;
-      canvas.save();
-      canvas.translate(xPos, -s * 0.04);
-      canvas.rotate(angle);
-
-      final double skiW = s * 0.28;
-      final double tailY = s * 0.52;
-      final double tipY = -s * 0.66;
-
-      final Path skiPath = Path()
-        ..moveTo(-skiW * 0.56, tailY)
-        ..lineTo(skiW * 0.56, tailY)
-        ..lineTo(skiW * 0.38, tipY * 0.74)
-        ..quadraticBezierTo(0, tipY, -skiW * 0.38, tipY * 0.74)
-        ..close();
-
-      canvas.drawPath(
-        skiPath.shift(Offset(0, s * 0.06)),
-        Paint()..color = edition.trimEdgeColor,
-      );
-
-      canvas.drawPath(skiPath, Paint()..color = edition.skiDeckColor);
-      canvas.drawPath(
-        skiPath,
-        Paint()
-          ..color = edition.skiAccentColor
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = (s * 0.055).clamp(1.1, 2.4),
-      );
-      canvas.drawLine(
-        Offset(0, tailY * 0.85),
-        Offset(0, tipY * 0.78),
-        Paint()
-          ..color = edition.skiAccentColor.withValues(alpha: 0.85)
-          ..strokeWidth = (s * 0.045).clamp(1.0, 1.9),
-      );
-
-      // 24K Gold LV ski binding plate beneath Vivienne's 3D Cycles feet / sneakers
-      final RRect binding = RRect.fromRectAndRadius(
-        Rect.fromCenter(
-          center: Offset(0, s * 0.12),
-          width: skiW * 0.78,
-          height: s * 0.16,
-        ),
-        Radius.circular(s * 0.04),
-      );
-      canvas.drawRRect(binding, Paint()..color = const Color(0xFFFFD700));
-      canvas.restore();
-    }
   }
 
   void _paintHeartShape(
