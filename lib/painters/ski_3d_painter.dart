@@ -75,7 +75,7 @@ class _ProjectedPoint3D {
 }
 
 /// High-Precision 60–120 FPS 3rd-Person Rear Perspective 3D Renderer (`Camera3D`)
-/// for `VIVI AU SKI : Descente Royale 3D` (`v1.4.0`).
+/// for `VIVI AU SKI : Descente Royale 3D` (`v1.5.0`).
 class Ski3DPainter extends CustomPainter {
   Ski3DPainter({
     required this.engine,
@@ -99,8 +99,8 @@ class Ski3DPainter extends CustomPainter {
   static const Color _kLvNeoCobalt = Color(0xFF1638E8);
   static const double _kZNear = 5.8;
   static const double _kZFar = 235.0;
-  static const int _kPisteCols = 10;
-  static const int _kSliceCount = 82;
+  static const int _kPisteCols = 16;
+  static const int _kSliceCount = 88;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -207,7 +207,111 @@ class Ski3DPainter extends CustomPainter {
 
     // 3. Unified Painter's Algorithm Z-Sort (`zFar -> zNear`) interleaving 3D Terrain Slices
     //    AND all 3D World Actors so foreground convex snow crests genuinely occlude
-    //    distant track sections, gates, trees, and spectators behind the ridge!
+    //    distant track sections, gates, trees, and spectators behind the ridge,
+    //    while guaranteeing (`v1.5.0`) that Vivienne is ALWAYS rendered ON TOP of all
+    //    acceleration / jump ramps and moguls!
+    final List<_DepthRenderItem> items = _buildSortedRenderItems(
+      camZ: camZ,
+      visibleSlices: visibleSlices,
+    );
+
+    for (final _DepthRenderItem item in items) {
+      switch (item.kind) {
+        case _DepthActorKind.terrainSlice:
+          _paintSingleSnowSlopeSlice3D(
+            canvas,
+            size,
+            track,
+            camZ,
+            visibleSlices[item.index],
+            project,
+            isClosestSlice: item.index == visibleSlices.length - 1,
+          );
+        case _DepthActorKind.worldProp:
+          _paintWorldProp3D(
+            canvas,
+            track,
+            camZ,
+            engine.worldProps[item.index],
+            project,
+          );
+        case _DepthActorKind.mogul:
+          _paintMogul3D(canvas, track, engine.moguls[item.index], project);
+        case _DepthActorKind.jumpRamp:
+          _paintJumpRamp3D(
+            canvas,
+            track,
+            camZ,
+            engine.jumpRamps[item.index],
+            project,
+          );
+        case _DepthActorKind.slalomGate:
+          _paintSlalomGate3D(canvas, engine.slalomGates[item.index], project);
+        case _DepthActorKind.blossom:
+          _paintBlossom3D(canvas, engine.blossoms[item.index], project);
+        case _DepthActorKind.viviennePlayer:
+          _paintPersistentSkiTracks3D(canvas, track, camZ, project);
+          _paintVivienneSkier3D(canvas, size, track, project);
+        case _DepthActorKind.snowParticle:
+          _paintSnowParticle3D(
+            canvas,
+            engine.snowParticles[item.index],
+            project,
+          );
+      }
+    }
+
+    canvas.restore(); // End camera roll
+
+    // 4. Radial High-Speed Wind Lines ("filets de vent alpin") along screen edges
+    _paintHighSpeedWindLines(canvas, size, track, horizonY, speedNorm);
+
+    // 5. Screen-space floating score callouts
+    _paintFloatingCallouts(canvas, size);
+
+    canvas.restore();
+  }
+
+  /// Diagnostic invariant check (`v1.5.0`): returns `true` iff in the active Z-sorted render
+  /// queue, `_DepthActorKind.viviennePlayer` is drawn strictly AFTER every visible
+  /// `_DepthActorKind.jumpRamp` and `_DepthActorKind.mogul` (so no ramp ever paints over Vivienne).
+  bool debugIsVivienneRenderedAboveAllRamps() {
+    final SkiTrackId track = engine.selectedTrack;
+    final double speedNorm =
+        ((engine.speedKmh - track.baseSpeedKmh) /
+                math.max(1.0, track.maxSpeedKmh - track.baseSpeedKmh))
+            .clamp(0.0, 1.3);
+    final double slopeRad = track.slopeDegrees * math.pi / 180.0;
+    final double slopeTan = math.tan(slopeRad);
+    final double steepFactor = ((slopeTan - 0.445) / 0.555).clamp(0.0, 1.0);
+    final double camDistBack = 11.4 +
+        speedNorm * 1.55 +
+        steepFactor * 0.75 +
+        (engine.playerY * 0.18).clamp(0.0, 1.6);
+    final double camZ = engine.playerZ - camDistBack;
+
+    final List<_DepthRenderItem> items = _buildSortedRenderItems(
+      camZ: camZ,
+      visibleSlices: const <_TerrainSlice3D>[],
+    );
+    final int vivIdx = items.indexWhere(
+      (_DepthRenderItem e) => e.kind == _DepthActorKind.viviennePlayer,
+    );
+    if (vivIdx < 0) return false;
+    for (int i = 0; i < items.length; i++) {
+      if ((items[i].kind == _DepthActorKind.jumpRamp ||
+              items[i].kind == _DepthActorKind.mogul) &&
+          i > vivIdx) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  List<_DepthRenderItem> _buildSortedRenderItems({
+    required double camZ,
+    required List<_TerrainSlice3D> visibleSlices,
+  }) {
     final List<_DepthRenderItem> items = <_DepthRenderItem>[];
     for (int i = 0; i < visibleSlices.length; i++) {
       items.add(
@@ -311,7 +415,7 @@ class Ski3DPainter extends CustomPainter {
       }
     }
 
-    // Insert Vivienne at her exact foreground 3D depth
+    // Insert Vivienne at her foreground 3D depth
     items.add(
       _DepthRenderItem(
         zWorld: engine.playerZ - 1.2,
@@ -324,55 +428,27 @@ class Ski3DPainter extends CustomPainter {
           b.zWorld.compareTo(a.zWorld),
     );
 
-    for (final _DepthRenderItem item in items) {
-      switch (item.kind) {
-        case _DepthActorKind.terrainSlice:
-          _paintSingleSnowSlopeSlice3D(
-            canvas,
-            size,
-            track,
-            camZ,
-            visibleSlices[item.index],
-            project,
-            isClosestSlice: item.index == visibleSlices.length - 1,
-          );
-        case _DepthActorKind.worldProp:
-          _paintWorldProp3D(
-            canvas,
-            track,
-            camZ,
-            engine.worldProps[item.index],
-            project,
-          );
-        case _DepthActorKind.mogul:
-          _paintMogul3D(canvas, track, engine.moguls[item.index], project);
-        case _DepthActorKind.jumpRamp:
-          _paintJumpRamp3D(canvas, engine.jumpRamps[item.index], project);
-        case _DepthActorKind.slalomGate:
-          _paintSlalomGate3D(canvas, engine.slalomGates[item.index], project);
-        case _DepthActorKind.blossom:
-          _paintBlossom3D(canvas, engine.blossoms[item.index], project);
-        case _DepthActorKind.viviennePlayer:
-          _paintPersistentSkiTracks3D(canvas, track, camZ, project);
-          _paintVivienneSkier3D(canvas, size, track, project);
-        case _DepthActorKind.snowParticle:
-          _paintSnowParticle3D(
-            canvas,
-            engine.snowParticles[item.index],
-            project,
-          );
+    // Enforce `v1.5.0` foreground invariant:
+    // Ramps use `zStart - 0.6` so they render on top of underlying snow mesh slices,
+    // which means when `playerZ > zStart + 0.6` (Vivienne climbing or launching off a ramp),
+    // `playerZ - 1.2 > zStart - 0.6`. Moving `viviennePlayer` immediately after the last
+    // `jumpRamp` / `mogul` guarantees zero ramp or mogul can EVER paint on top of Vivienne!
+    final int vivIdx = items.indexWhere(
+      (_DepthRenderItem e) => e.kind == _DepthActorKind.viviennePlayer,
+    );
+    int lastRampOrMogulIdx = -1;
+    for (int i = 0; i < items.length; i++) {
+      final _DepthActorKind k = items[i].kind;
+      if (k == _DepthActorKind.jumpRamp || k == _DepthActorKind.mogul) {
+        lastRampOrMogulIdx = i;
       }
     }
+    if (vivIdx >= 0 && lastRampOrMogulIdx > vivIdx) {
+      final _DepthRenderItem vivItem = items.removeAt(vivIdx);
+      items.insert(lastRampOrMogulIdx, vivItem);
+    }
 
-    canvas.restore(); // End camera roll
-
-    // 4. Radial High-Speed Wind Lines ("filets de vent alpin") along screen edges
-    _paintHighSpeedWindLines(canvas, size, track, horizonY, speedNorm);
-
-    // 5. Screen-space floating score callouts
-    _paintFloatingCallouts(canvas, size);
-
-    canvas.restore();
+    return items;
   }
 
   void _paintHighSpeedWindLines(
@@ -877,12 +953,17 @@ class Ski3DPainter extends CustomPainter {
       Color quadColor = basePisteCol;
       if (avgMH > 0.03) {
         final double slopeM = farMH - nearMH;
-        if (slopeM > 0.02) {
-          // Downhill lee side of mogul facing camera -> crisp alpine shadow sculpting!
+        final Color glacierShade = Color.lerp(
+          track.snowShadowColor,
+          const Color(0xFF7CB9E8),
+          0.48,
+        )!;
+        if (slopeM > 0.012) {
+          // Downhill lee side of mogul facing camera -> crisp glacier snow sculpting!
           quadColor = Color.lerp(
             quadColor,
-            track.snowShadowColor,
-            (0.20 + slopeM * 0.55).clamp(0.12, 0.52),
+            glacierShade,
+            (0.26 + slopeM * 0.65).clamp(0.16, 0.60),
           )!;
         } else {
           // Sunlit crest / uphill dome of mogul -> sparkling white snow!
@@ -1103,22 +1184,22 @@ class Ski3DPainter extends CustomPainter {
 
       final _ProjectedPoint3D l0 = project(
         p0.leftSkiX,
-        engine.mogulElevationAt(p0.leftSkiX, p0.z) + 0.03,
+        engine.groundSurfaceHeightAt(p0.leftSkiX, p0.z) + 0.03,
         p0.z,
       );
       final _ProjectedPoint3D l1 = project(
         p1.leftSkiX,
-        engine.mogulElevationAt(p1.leftSkiX, p1.z) + 0.03,
+        engine.groundSurfaceHeightAt(p1.leftSkiX, p1.z) + 0.03,
         p1.z,
       );
       final _ProjectedPoint3D r0 = project(
         p0.rightSkiX,
-        engine.mogulElevationAt(p0.rightSkiX, p0.z) + 0.03,
+        engine.groundSurfaceHeightAt(p0.rightSkiX, p0.z) + 0.03,
         p0.z,
       );
       final _ProjectedPoint3D r1 = project(
         p1.rightSkiX,
-        engine.mogulElevationAt(p1.rightSkiX, p1.z) + 0.03,
+        engine.groundSurfaceHeightAt(p1.rightSkiX, p1.z) + 0.03,
         p1.z,
       );
 
@@ -1150,6 +1231,7 @@ class Ski3DPainter extends CustomPainter {
         _paintSnowPineTree3D(
           canvas,
           track,
+          camZ,
           prop,
           project,
           tiers: prop.kind == SkiPropKind.giantSnowPine ? 4 : 3,
@@ -1157,7 +1239,7 @@ class Ski3DPainter extends CustomPainter {
       case SkiPropKind.crystalIceRock:
         _paintCrystalIceRock3D(canvas, prop, project);
       case SkiPropKind.alpineChalet:
-        _paintAlpineChalet3D(canvas, prop, project);
+        _paintAlpineChalet3D(canvas, track, prop, project);
       case SkiPropKind.lvBannerPost:
         _paintLvNeoBanner3D(canvas, track, camZ, prop, project);
       case SkiPropKind.cableCarPylon:
@@ -1180,13 +1262,14 @@ class Ski3DPainter extends CustomPainter {
   void _paintSnowPineTree3D(
     Canvas canvas,
     SkiTrackId track,
+    double camZ,
     SkiWorldProp3D prop,
     _ProjectedPoint3D Function(double x, double y, double z) project, {
     required int tiers,
   }) {
     final _ProjectedPoint3D base = project(prop.x, 0.0, prop.z);
     final double s = base.scale * prop.scale;
-    if (s < 0.8) return;
+    if (s < 0.72) return;
 
     final double treeW = 3.2 * s;
     final double treeH = (tiers == 4 ? 7.4 : 5.8) * s;
@@ -1269,6 +1352,166 @@ class Ski3DPainter extends CustomPainter {
         ..close();
       canvas.drawPath(snowCap, Paint()..color = track.pineSnowColor);
     }
+
+    // `v1.5.0`: High-Visibility 3D Quilted Orange Safety Mattress (`matelas de sécurité orange`)
+    // placed in front of every on-piste pine tree (`prop.isOnPiste == true`) facing the skier!
+    if (prop.isOnPiste) {
+      _paintPineSafetyMattress3D(canvas, track, camZ, prop, project);
+    }
+  }
+
+  /// 3D Cartoon Curved Quilted Orange Piste Safety Pad (`#FF6D00` / `#FF9100` / `#FF3D00`)
+  /// mounted in front of on-piste pine trees (`z - 0.58 * scale`), complete with vertical
+  /// foam bolsters, yellow/dark safety straps, snow base cushion, and `#2B1105` outline.
+  void _paintPineSafetyMattress3D(
+    Canvas canvas,
+    SkiTrackId track,
+    double camZ,
+    SkiWorldProp3D prop,
+    _ProjectedPoint3D Function(double x, double y, double z) project,
+  ) {
+    final double padZ =
+        math.max(camZ + _kZNear * 0.84, prop.z - 0.58 * prop.scale);
+    final _ProjectedPoint3D padBase = project(prop.x, 0.0, padZ);
+    final _ProjectedPoint3D padTop =
+        project(prop.x, 1.48 * prop.scale, padZ);
+    final double ps = padBase.scale * prop.scale;
+    if (ps < 0.72) return;
+
+    final double padW = 2.10 * ps;
+    final double padH = math.max(ps * 1.15, (padBase.y - padTop.y).abs());
+    final double cx = padBase.x;
+    final double botY = padBase.y;
+    final double topY = botY - padH;
+    final double curveSag = padH * 0.13;
+    final double strokeW = (ps * 0.11).clamp(1.0, 2.8);
+
+    // Subtle ground contact shadow in front of the safety mattress
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(cx, botY + ps * 0.10),
+        width: padW * 1.12,
+        height: ps * 0.42,
+      ),
+      Paint()..color = const Color(0xFF1A3B5C).withValues(alpha: 0.28),
+    );
+
+    // 1. Top cylindrical foam thickness rim (`#FFB74D`) wrapping back toward the pine trunk
+    final Path topRim = Path()
+      ..moveTo(cx - padW * 0.50, topY)
+      ..quadraticBezierTo(cx, topY - curveSag * 0.85, cx + padW * 0.50, topY)
+      ..quadraticBezierTo(cx, topY + curveSag, cx - padW * 0.50, topY)
+      ..close();
+    canvas.drawPath(topRim, Paint()..color = const Color(0xFFFFB74D));
+
+    // 2. Main 3D Half-Cylinder Safety Orange Foam Body (`#FF6D00` / `#FF9100` / `#DD2C00`)
+    final Path body = Path()
+      ..moveTo(cx - padW * 0.50, topY)
+      ..quadraticBezierTo(cx, topY + curveSag, cx + padW * 0.50, topY)
+      ..lineTo(cx + padW * 0.50, botY)
+      ..quadraticBezierTo(cx, botY + curveSag * 1.15, cx - padW * 0.50, botY)
+      ..close();
+    canvas.drawPath(
+      body,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset(cx - padW * 0.50, topY),
+          Offset(cx + padW * 0.50, botY),
+          const <Color>[
+            Color(0xFFE65100),
+            Color(0xFFFFAB40),
+            Color(0xFFFF6D00),
+            Color(0xFFDD2C00),
+          ],
+          const <double>[0.0, 0.28, 0.64, 1.0],
+        ),
+    );
+
+    // 3. Vertical Quilted Foam Bolsters (`boudins matelassés`) & Specular Highlights
+    for (final double u in <double>[-0.30, -0.10, 0.10, 0.30]) {
+      final double bx = cx + padW * u;
+      final double sagFactor = 1.0 - (u * 2.0) * (u * 2.0);
+      final double bTop = topY + curveSag * 0.52 * sagFactor;
+      final double bBot = botY + curveSag * 0.58 * sagFactor;
+      canvas.drawLine(
+        Offset(bx, bTop + ps * 0.05),
+        Offset(bx, bBot - ps * 0.05),
+        Paint()
+          ..color = const Color(0xFFBF360C).withValues(alpha: 0.72)
+          ..strokeWidth = (ps * 0.08).clamp(0.8, 2.0)
+          ..strokeCap = StrokeCap.round,
+      );
+      canvas.drawLine(
+        Offset(bx - padW * 0.04, bTop + ps * 0.10),
+        Offset(bx - padW * 0.04, bBot - ps * 0.12),
+        Paint()
+          ..color = const Color(0xFFFFE0B2).withValues(alpha: 0.55)
+          ..strokeWidth = (ps * 0.06).clamp(0.7, 1.6)
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    // 4. Dual Horizontal High-Visibility Hazard Straps (`sangles jaune/noir`)
+    for (final double vFrac in <double>[0.32, 0.70]) {
+      final double sy = topY + padH * vFrac;
+      final Path strap = Path()
+        ..moveTo(cx - padW * 0.50, sy)
+        ..quadraticBezierTo(cx, sy + curveSag, cx + padW * 0.50, sy);
+      canvas.drawPath(
+        strap,
+        Paint()
+          ..color = _kOutline
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = (ps * 0.16).clamp(1.3, 3.8)
+          ..strokeCap = StrokeCap.butt,
+      );
+      // Center safety yellow hazard buckle / reflective tape (`#FFD600`)
+      final Path yellowTape = Path()
+        ..moveTo(cx - padW * 0.32, sy + curveSag * 0.30)
+        ..quadraticBezierTo(
+          cx,
+          sy + curveSag * 0.96,
+          cx + padW * 0.32,
+          sy + curveSag * 0.30,
+        );
+      canvas.drawPath(
+        yellowTape,
+        Paint()
+          ..color = const Color(0xFFFFD600)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = (ps * 0.09).clamp(0.9, 2.2)
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    // 5. Crisp Cartoon Outline `#2B1105` + Piste Snow Cushion at Base
+    final Paint outline = Paint()
+      ..color = _kOutline
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeW
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(topRim, outline);
+    canvas.drawPath(body, outline);
+
+    final Path snowFoot = Path()
+      ..moveTo(cx - padW * 0.56, botY + curveSag * 0.25)
+      ..quadraticBezierTo(
+        cx,
+        botY + curveSag * 1.42,
+        cx + padW * 0.56,
+        botY + curveSag * 0.25,
+      )
+      ..quadraticBezierTo(
+        cx,
+        botY + curveSag * 0.72,
+        cx - padW * 0.56,
+        botY + curveSag * 0.25,
+      )
+      ..close();
+    canvas.drawPath(
+      snowFoot,
+      Paint()..color = track.snowBrightColor.withValues(alpha: 0.92),
+    );
   }
 
   void _paintCrystalIceRock3D(
@@ -1316,105 +1559,126 @@ class Ski3DPainter extends CustomPainter {
     final _ProjectedPoint3D apex =
         project(mogul.x, mogul.heightMeters, mogul.z);
     final double s = base.scale;
-    if (s < 1.10) return;
+    if (s < 0.95) return;
 
-    final double w = mogul.radiusX * 2.05 * s;
-    final double h = math.max(s * 0.58, (base.y - apex.y).abs() * 1.28);
-
-    // 1. Soft Alpine Trough Shadow beneath the deformed mogul base
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(base.x + w * 0.04, base.y + h * 0.14),
-        width: w * 1.04,
-        height: h * 0.54,
-      ),
-      Paint()..color = track.snowShadowColor.withValues(alpha: 0.62),
-    );
-
-    // 2. Sculpted 3D Snow Dome rising seamlessly from the piste mesh
-    final Path domePath = Path()
-      ..moveTo(base.x - w * 0.52, base.y + h * 0.06)
-      ..cubicTo(
-        base.x - w * 0.36,
-        apex.y - h * 0.24,
-        base.x + w * 0.36,
-        apex.y - h * 0.24,
-        base.x + w * 0.52,
-        base.y + h * 0.06,
-      )
-      ..quadraticBezierTo(
-        base.x,
-        base.y + h * 0.24,
-        base.x - w * 0.52,
-        base.y + h * 0.06,
-      )
-      ..close();
-
-    final Rect domeBounds = domePath.getBounds();
-    final Color shadowBlue = Color.lerp(
+    final double w = mogul.radiusX * 2.25 * s;
+    final double h = math.max(s * 0.68, (base.y - apex.y).abs() * 1.42);
+    final Color glacierShade = Color.lerp(
       track.snowShadowColor,
-      const Color(0xFF64B5F6),
-      0.42,
+      const Color(0xFF72B4E8),
+      0.55,
     )!;
-    canvas.drawPath(
-      domePath,
+
+    // 1. Feathered Lee-Side Glacier Snow Hollow Shading (fades radially to 0.0 alpha — zero hard edge!)
+    final Rect leeRect = Rect.fromCenter(
+      center: Offset(base.x + w * 0.09, base.y + h * 0.14),
+      width: w * 1.30,
+      height: h * 0.98,
+    );
+    canvas.drawOval(
+      leeRect,
       Paint()
-        ..shader = ui.Gradient.linear(
-          Offset(domeBounds.left, domeBounds.top),
-          Offset(domeBounds.right, domeBounds.bottom),
+        ..shader = ui.Gradient.radial(
+          leeRect.center,
+          math.max(4.0, leeRect.width * 0.50),
           <Color>[
-            Colors.white,
-            track.snowMidColor,
-            shadowBlue.withValues(alpha: 0.85),
+            glacierShade.withValues(alpha: 0.64),
+            glacierShade.withValues(alpha: 0.30),
+            glacierShade.withValues(alpha: 0.0),
           ],
-          const <double>[0.0, 0.52, 1.0],
+          const <double>[0.0, 0.58, 1.0],
         ),
     );
 
-    // 3. Crisp Glacier Contour Rim & Specular Snow Cap so moguls read clearly at speed
-    final Path crestArc = Path()
-      ..moveTo(base.x - w * 0.46, base.y + h * 0.02)
-      ..cubicTo(
-        base.x - w * 0.30,
-        apex.y - h * 0.22,
-        base.x + w * 0.30,
-        apex.y - h * 0.22,
-        base.x + w * 0.46,
-        base.y + h * 0.02,
-      );
-    canvas.drawPath(
-      crestArc,
+    // 2. Seamless 3D Snow Swell Dome (sunlit white crown -> soft powder-azure flank -> 0.0 alpha skirt!)
+    final Rect domeRect = Rect.fromCenter(
+      center: Offset(apex.x, (apex.y + base.y) * 0.50),
+      width: w * 1.22,
+      height: h * 1.18,
+    );
+    canvas.drawOval(
+      domeRect,
       Paint()
-        ..color = const Color(0xFF3979A8).withValues(alpha: 0.52)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = (s * 0.12).clamp(1.1, 2.8)
-        ..strokeCap = StrokeCap.round,
+        ..shader = ui.Gradient.radial(
+          Offset(apex.x - w * 0.14, apex.y - h * 0.06),
+          math.max(4.0, domeRect.width * 0.56),
+          <Color>[
+            Colors.white.withValues(alpha: 0.98),
+            const Color(0xFFEBF6FF).withValues(alpha: 0.84),
+            glacierShade.withValues(alpha: 0.46),
+            glacierShade.withValues(alpha: 0.0),
+          ],
+          const <double>[0.0, 0.38, 0.74, 1.0],
+        ),
     );
 
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(apex.x - w * 0.08, apex.y + h * 0.06),
-        width: w * 0.44,
-        height: h * 0.24,
-      ),
-      Paint()..color = Colors.white.withValues(alpha: 0.90),
+    // 3. 3D Groomed Corduroy Snow Ribs (`nervures de damage 3D`) arching across the mogul
+    //    so the bump reads unmistakably as sculpted snow relief integrated into the piste!
+    if (s > 1.35) {
+      for (int r = -2; r <= 2; r++) {
+        final double u = r * 0.25;
+        final double rx = mogul.x + mogul.radiusX * u;
+        final double ribFactor = math.cos(u * math.pi * 0.5);
+        final double ribApexH = mogul.heightMeters * ribFactor * ribFactor;
+        final _ProjectedPoint3D pNear =
+            project(rx, 0.02, mogul.z - mogul.radiusZ * 0.70);
+        final _ProjectedPoint3D pCrown = project(rx, ribApexH + 0.03, mogul.z);
+        final _ProjectedPoint3D pFar =
+            project(rx, 0.02, mogul.z + mogul.radiusZ * 0.70);
+        final Path rib = Path()
+          ..moveTo(pNear.x, pNear.y)
+          ..quadraticBezierTo(
+            pCrown.x,
+            pCrown.y - (pNear.y - pCrown.y) * 0.24,
+            pFar.x,
+            pFar.y,
+          );
+        canvas.drawPath(
+          rib,
+          Paint()
+            ..color = const Color(0xFF5C9ED6).withValues(alpha: 0.38 * ribFactor)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = (s * 0.08).clamp(0.9, 2.2)
+            ..strokeCap = StrokeCap.round,
+        );
+      }
+    }
+
+    // 4. Soft Sunlit Powder Ridge Highlight along upper crest (zero hard outline!)
+    final Path snowCrest = Path()
+      ..moveTo(base.x - w * 0.36, base.y + h * 0.04)
+      ..quadraticBezierTo(
+        apex.x - w * 0.04,
+        apex.y - h * 0.26,
+        base.x + w * 0.36,
+        base.y + h * 0.04,
+      );
+    canvas.drawPath(
+      snowCrest,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.92)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = (s * 0.16).clamp(1.4, 3.8)
+        ..strokeCap = StrokeCap.round,
     );
   }
 
   void _paintJumpRamp3D(
     Canvas canvas,
+    SkiTrackId track,
+    double camZ,
     SkiJumpRamp3D ramp,
     _ProjectedPoint3D Function(double x, double y, double z) project,
   ) {
-    final double camZApprox = engine.playerZ - 11.8;
     final double zFarRamp = ramp.z + ramp.length * 0.5;
-    if (zFarRamp <= camZApprox + _kZNear + 0.5) return;
+    if (zFarRamp <= camZ + _kZNear + 0.4) return;
 
     final double rawZNearRamp = ramp.z - ramp.length * 0.5;
-    final double zNearRamp = math.max(rawZNearRamp, camZApprox + _kZNear + 0.2);
+    final double zNearRamp = math.max(rawZNearRamp, camZ + _kZNear * 0.82);
     final double nearClipFrac =
         ((zNearRamp - rawZNearRamp) / ramp.length).clamp(0.0, 0.95);
-    final double nearClippedY = 0.04 + ramp.heightMeters * nearClipFrac;
+    // Start flush at y = 0.0 when unclipped so the snow piste flows directly onto the ramp!
+    final double nearClippedY = ramp.heightMeters * nearClipFrac;
 
     final double halfW = ramp.width * 0.5;
     final _ProjectedPoint3D nL =
@@ -1430,43 +1694,67 @@ class Ski3DPainter extends CustomPainter {
     final _ProjectedPoint3D fLBase = project(ramp.x - halfW, 0.0, zFarRamp);
     final _ProjectedPoint3D fRBase = project(ramp.x + halfW, 0.0, zFarRamp);
 
-    if (fLTop.scale < 0.82) return;
+    if (fLTop.scale < 0.78) return;
 
     final bool isSmall = ramp.sizeTier == SkiRampSizeTier.small;
     final bool isLarge = ramp.sizeTier == SkiRampSizeTier.large;
 
-    // 1. Sculpted Lateral Snow Buttresses on `large` Big Air Superstructure!
-    if (isLarge) {
-      const double buttressW = 1.45;
-      final _ProjectedPoint3D bFL =
-          project(ramp.x - halfW - buttressW, 0.0, zFarRamp);
-      final _ProjectedPoint3D bNL =
-          project(ramp.x - halfW - buttressW * 0.75, 0.0, zNearRamp);
-      final _ProjectedPoint3D bFR =
-          project(ramp.x + halfW + buttressW, 0.0, zFarRamp);
-      final _ProjectedPoint3D bNR =
-          project(ramp.x + halfW + buttressW * 0.75, 0.0, zNearRamp);
+    // 1. `v1.5.0`: Sculpted Lateral Snow Buttresses (`talus de neige latéraux`) on ALL ramp tiers
+    //    (`small`, `medium`, `large`) fading smoothly to 0.0 alpha on the snow piste!
+    final double buttressW = isSmall ? 1.15 : (isLarge ? 1.65 : 1.35);
+    final _ProjectedPoint3D bFL =
+        project(ramp.x - halfW - buttressW, 0.0, zFarRamp);
+    final _ProjectedPoint3D bNL =
+        project(ramp.x - halfW - buttressW * 0.65, 0.0, zNearRamp);
+    final _ProjectedPoint3D bFR =
+        project(ramp.x + halfW + buttressW, 0.0, zFarRamp);
+    final _ProjectedPoint3D bNR =
+        project(ramp.x + halfW + buttressW * 0.65, 0.0, zNearRamp);
 
-      final Path leftButtress = Path()
-        ..moveTo(nL.x, nL.y)
-        ..lineTo(fLTop.x, fLTop.y)
-        ..lineTo(bFL.x, bFL.y)
-        ..lineTo(bNL.x, bNL.y)
-        ..close();
-      final Path rightButtress = Path()
-        ..moveTo(nR.x, nR.y)
-        ..lineTo(fRTop.x, fRTop.y)
-        ..lineTo(bFR.x, bFR.y)
-        ..lineTo(bNR.x, bNR.y)
-        ..close();
-      final Paint buttressPaint = Paint()..color = const Color(0xFFD6EEFF);
-      canvas.drawPath(leftButtress, buttressPaint);
-      canvas.drawPath(rightButtress, buttressPaint);
-    }
+    final Path leftButtress = Path()
+      ..moveTo(nL.x, nL.y)
+      ..lineTo(fLTop.x, fLTop.y)
+      ..lineTo(bFL.x, bFL.y)
+      ..lineTo(bNL.x, bNL.y)
+      ..close();
+    final Path rightButtress = Path()
+      ..moveTo(nR.x, nR.y)
+      ..lineTo(fRTop.x, fRTop.y)
+      ..lineTo(bFR.x, bFR.y)
+      ..lineTo(bNR.x, bNR.y)
+      ..close();
+    canvas.drawPath(
+      leftButtress,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset((nL.x + fLTop.x) * 0.5, (nL.y + fLTop.y) * 0.5),
+          Offset((bNL.x + bFL.x) * 0.5, (bNL.y + bFL.y) * 0.5),
+          <Color>[
+            Colors.white.withValues(alpha: 0.95),
+            track.snowMidColor.withValues(alpha: 0.65),
+            track.snowBrightColor.withValues(alpha: 0.0),
+          ],
+          const <double>[0.0, 0.55, 1.0],
+        ),
+    );
+    canvas.drawPath(
+      rightButtress,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset((nR.x + fRTop.x) * 0.5, (nR.y + fRTop.y) * 0.5),
+          Offset((bNR.x + bFR.x) * 0.5, (bNR.y + bFR.y) * 0.5),
+          <Color>[
+            track.snowShadowColor.withValues(alpha: 0.88),
+            track.snowMidColor.withValues(alpha: 0.50),
+            track.snowBrightColor.withValues(alpha: 0.0),
+          ],
+          const <double>[0.0, 0.55, 1.0],
+        ),
+    );
 
-    // 2. 3D Side & Front Structural Walls
+    // 2. 3D Side & Front Structural / Compacted-Snow Walls
     final Color wallColor = isSmall
-        ? const Color(0xFF90CAF9)
+        ? Color.lerp(track.snowShadowColor, const Color(0xFF81D4FA), 0.45)!
         : (isLarge ? const Color(0xFF2B1810) : const Color(0xFF3A2618));
 
     final Path leftSideWall = Path()
@@ -1491,12 +1779,13 @@ class Ski3DPainter extends CustomPainter {
     canvas.drawPath(rightSideWall, Paint()..color = wallColor);
     canvas.drawPath(frontWall, Paint()..color = wallColor);
 
-    // 3. Inclined Launch Deck shaded by Size Tier (`small` Cyan/Snow, `medium` Blossom Gold, `large` Royal Crimson/Gold)
+    // 3. Inclined Launch Deck shaded by Size Tier
+    //    `small` is sculpted directly out of piste snow (`Colors.white -> snowBright -> soft glacier lip`)!
     final List<Color> deckColors = switch (ramp.sizeTier) {
-      SkiRampSizeTier.small => const <Color>[
-          Color(0xFFFFFFFF),
-          Color(0xFFE1F5FE),
-          Color(0xFF4FC3F7),
+      SkiRampSizeTier.small => <Color>[
+          track.snowBrightColor,
+          const Color(0xFFF2FAFF),
+          const Color(0xFFB3E5FC),
         ],
       SkiRampSizeTier.medium => const <Color>[
           Color(0xFFFFFFFF),
@@ -1520,23 +1809,89 @@ class Ski3DPainter extends CustomPainter {
       deck,
       Paint()
         ..shader = ui.Gradient.linear(
-          Offset(nL.x, nL.y),
-          Offset(fLTop.x, fLTop.y),
+          Offset((nL.x + nR.x) * 0.5, (nL.y + nR.y) * 0.5),
+          Offset((fLTop.x + fRTop.x) * 0.5, (fLTop.y + fRTop.y) * 0.5),
           deckColors,
-          const <double>[0.0, 0.65, 1.0],
+          const <double>[0.0, 0.62, 1.0],
         ),
     );
-    canvas.drawPath(
-      deck,
-      Paint()
+
+    // 3b. Seamless Snow Entry Apron (`jupe de transition neigeuse`) at `zNearRamp`
+    //     so the white snow piste flows organically onto the ramp without ANY dark seam!
+    if (nearClipFrac < 0.06) {
+      final double zApronStart =
+          math.max(camZ + _kZNear * 0.80, zNearRamp - 1.65);
+      final double zApronEnd = zNearRamp + ramp.length * 0.28;
+      final double yApronEnd = ramp.heightMeters * 0.28;
+      final _ProjectedPoint3D aNL =
+          project(ramp.x - halfW * 1.12, 0.0, zApronStart);
+      final _ProjectedPoint3D aNR =
+          project(ramp.x + halfW * 1.12, 0.0, zApronStart);
+      final _ProjectedPoint3D aFL =
+          project(ramp.x - halfW * 0.98, yApronEnd, zApronEnd);
+      final _ProjectedPoint3D aFR =
+          project(ramp.x + halfW * 0.98, yApronEnd, zApronEnd);
+      final Path apron = Path()
+        ..moveTo(aNL.x, aNL.y)
+        ..lineTo(aNR.x, aNR.y)
+        ..lineTo(aFR.x, aFR.y)
+        ..lineTo(aFL.x, aFL.y)
+        ..close();
+      canvas.drawPath(
+        apron,
+        Paint()
+          ..shader = ui.Gradient.linear(
+            Offset((aNL.x + aNR.x) * 0.5, (aNL.y + aNR.y) * 0.5),
+            Offset((aFL.x + aFR.x) * 0.5, (aFL.y + aFR.y) * 0.5),
+            <Color>[
+              track.snowBrightColor.withValues(alpha: 0.0),
+              Colors.white.withValues(alpha: 0.94),
+              Colors.white.withValues(alpha: 0.0),
+            ],
+            const <double>[0.0, 0.45, 1.0],
+          ),
+      );
+    }
+
+    // 3c. Longitudinal Groomed Corduroy Lines on `small` Snow Kickers + Open Side Rails on `medium`/`large`
+    //     (Notice: NO transverse `_kOutline` line across `nL -> nR`!)
+    if (isSmall) {
+      for (int g = -2; g <= 2; g++) {
+        final double gx = ramp.x + halfW * (g * 0.34);
+        final _ProjectedPoint3D gNear = project(gx, nearClippedY, zNearRamp);
+        final _ProjectedPoint3D gFar = project(gx, ramp.heightMeters, zFarRamp);
+        canvas.drawLine(
+          Offset(gNear.x, gNear.y),
+          Offset(gFar.x, gFar.y),
+          Paint()
+            ..color = track.snowShadowColor.withValues(alpha: 0.34)
+            ..strokeWidth = (fLTop.scale * 0.07).clamp(0.8, 1.8)
+            ..strokeCap = StrokeCap.round,
+        );
+      }
+      // Subtle glacier side-edge accents (open at bottom entrance!)
+      final Paint snowEdgePaint = Paint()
+        ..color = const Color(0xFF4FC3F7).withValues(alpha: 0.65)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = (fLTop.scale * 0.10).clamp(1.0, 2.4)
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(Offset(nL.x, nL.y), Offset(fLTop.x, fLTop.y), snowEdgePaint);
+      canvas.drawLine(Offset(nR.x, nR.y), Offset(fRTop.x, fRTop.y), snowEdgePaint);
+    } else {
+      final Paint railOutline = Paint()
         ..color = _kOutline
         ..style = PaintingStyle.stroke
-        ..strokeWidth = (nL.scale * 0.11).clamp(1.2, 3.0),
-    );
+        ..strokeWidth = (nL.scale * 0.10).clamp(1.1, 2.8)
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round;
+      canvas.drawLine(Offset(nL.x, nL.y), Offset(fLTop.x, fLTop.y), railOutline);
+      canvas.drawLine(Offset(nR.x, nR.y), Offset(fRTop.x, fRTop.y), railOutline);
+      canvas.drawPath(frontWall, railOutline);
+    }
 
     // 4. Launch Lip Bar
     final Color lipColor = isSmall
-        ? const Color(0xFF0288D1)
+        ? const Color(0xFF29B6F6)
         : (isLarge ? const Color(0xFFFFD700) : const Color(0xFF8B1E24));
     canvas.drawLine(
       Offset(fLTop.x, fLTop.y),
@@ -1544,27 +1899,39 @@ class Ski3DPainter extends CustomPainter {
       Paint()
         ..color = lipColor
         ..strokeWidth =
-            (fLTop.scale * (isLarge ? 0.36 : 0.26)).clamp(2.0, 8.0)
+            (fLTop.scale * (isLarge ? 0.36 : (isSmall ? 0.20 : 0.26)))
+                .clamp(1.8, 8.0)
         ..strokeCap = StrokeCap.round,
     );
+    if (isSmall) {
+      // Crisp white snow lip crest highlight above the glacier rim
+      canvas.drawLine(
+        Offset(fLTop.x, fLTop.y - 1.2),
+        Offset(fRTop.x, fRTop.y - 1.2),
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.92)
+          ..strokeWidth = (fLTop.scale * 0.11).clamp(1.1, 3.0)
+          ..strokeCap = StrokeCap.round,
+      );
+    }
 
-    // 5. Animated Boost Chevrons (`2` on small, `3` on medium, `4` double luminous chevrons on large!)
+    // 5. Animated Boost Chevrons (`2` snow-dyed on small, `3` on medium, `4` double luminous on large!)
     final int chevronCount = isSmall ? 2 : (isLarge ? 4 : 3);
     final double pulse = (engine.ambientTime * 3.2) % 1.0;
     final Color chevColor = isSmall
-        ? const Color(0xFF00B0FF)
+        ? const Color(0xFF00B0FF).withValues(alpha: 0.68)
         : (isLarge ? const Color(0xFFFF1744) : const Color(0xFFFFB300));
     for (int c = 0; c < chevronCount; c++) {
       final double u =
           ((c / chevronCount) + pulse * (1.0 / chevronCount)) % 1.0;
       final double cz = zNearRamp + (zFarRamp - zNearRamp) * u;
       final double cy =
-          nearClippedY + (ramp.heightMeters - nearClippedY) * u + 0.05;
-      final _ProjectedPoint3D mid = project(ramp.x, cy + 0.15, cz + 0.75);
+          nearClippedY + (ramp.heightMeters - nearClippedY) * u + 0.04;
+      final _ProjectedPoint3D mid = project(ramp.x, cy + 0.14, cz + 0.72);
       final _ProjectedPoint3D leftWing =
-          project(ramp.x - halfW * 0.62, cy, cz);
+          project(ramp.x - halfW * 0.58, cy, cz);
       final _ProjectedPoint3D rightWing =
-          project(ramp.x + halfW * 0.62, cy, cz);
+          project(ramp.x + halfW * 0.58, cy, cz);
       final Path chev = Path()
         ..moveTo(leftWing.x, leftWing.y)
         ..lineTo(mid.x, mid.y)
@@ -1585,7 +1952,7 @@ class Ski3DPainter extends CustomPainter {
         Paint()
           ..color = chevColor
           ..style = PaintingStyle.stroke
-          ..strokeWidth = (mid.scale * 0.18).clamp(1.5, 4.2)
+          ..strokeWidth = (mid.scale * (isSmall ? 0.15 : 0.18)).clamp(1.4, 4.2)
           ..strokeCap = StrokeCap.round
           ..strokeJoin = StrokeJoin.round,
       );
@@ -1811,90 +2178,372 @@ class Ski3DPainter extends CustomPainter {
 
   void _paintAlpineChalet3D(
     Canvas canvas,
+    SkiTrackId track,
     SkiWorldProp3D prop,
     _ProjectedPoint3D Function(double x, double y, double z) project,
   ) {
     final _ProjectedPoint3D base = project(prop.x, 0.0, prop.z);
     final double s = base.scale * prop.scale;
-    if (s < 0.85) return;
+    if (s < 0.36) return;
 
-    final double w = 6.8 * s;
-    final double h = 4.6 * s;
+    final int archVariant = prop.variant % 3;
+    final double w = (archVariant == 1 ? 7.6 : (archVariant == 2 ? 7.0 : 6.8)) * s;
+    final double h = (archVariant == 1 ? 6.0 : (archVariant == 2 ? 5.0 : 4.7)) * s;
+    final double strokeW = (s * 0.11).clamp(0.9, 2.8);
+    final Paint outline = Paint()
+      ..color = _kOutline
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeW
+      ..strokeJoin = StrokeJoin.round;
 
-    // Stone chimney + warm rising cartoon smoke rings
-    final Rect chimney = Rect.fromCenter(
-      center: Offset(base.x + w * 0.28, base.y - h * 1.02),
-      width: w * 0.14,
-      height: h * 0.34,
+    // Ground snow shadow beneath village building
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(base.x + w * 0.05, base.y + s * 0.12),
+        width: w * 1.12,
+        height: s * 0.56,
+      ),
+      Paint()..color = const Color(0xFF1A3B5C).withValues(alpha: 0.24),
     );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(chimney, Radius.circular(s * 0.08)),
-      Paint()..color = const Color(0xFF5D4037),
-    );
-    for (int k = 0; k < 3; k++) {
-      final double phase = (engine.ambientTime * 0.9 + k * 0.33 + prop.id * 0.2) % 1.0;
-      final Offset puff = Offset(
-        chimney.center.dx + math.sin(phase * 5.0 + k) * s * 0.35,
-        chimney.top - phase * s * 1.65,
+
+    // Stone chimney + warm rising cartoon smoke puffs (`archVariant` 0 & 2)
+    if (archVariant != 1) {
+      final double chimOffX = archVariant == 0 ? 0.28 : -0.27;
+      final Rect chimney = Rect.fromCenter(
+        center: Offset(base.x + w * chimOffX, base.y - h * 1.02),
+        width: w * 0.13,
+        height: h * 0.34,
       );
-      canvas.drawCircle(
-        puff,
-        (s * (0.20 + phase * 0.28)).clamp(1.2, 9.0),
-        Paint()..color = Colors.white.withValues(alpha: (1.0 - phase) * 0.58),
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(chimney, Radius.circular(s * 0.08)),
+        Paint()..color = const Color(0xFF5D4037),
       );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(chimney, Radius.circular(s * 0.08)),
+        outline,
+      );
+      for (int k = 0; k < 3; k++) {
+        final double phase =
+            (engine.ambientTime * 0.9 + k * 0.33 + prop.id * 0.2) % 1.0;
+        final Offset puff = Offset(
+          chimney.center.dx + math.sin(phase * 5.0 + k) * s * 0.35,
+          chimney.top - phase * s * 1.65,
+        );
+        canvas.drawCircle(
+          puff,
+          (s * (0.18 + phase * 0.26)).clamp(1.0, 9.0),
+          Paint()..color = Colors.white.withValues(alpha: (1.0 - phase) * 0.58),
+        );
+      }
     }
 
-    final Rect walls = Rect.fromCenter(
-      center: Offset(base.x, base.y - h * 0.42),
-      width: w,
-      height: h * 0.84,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(walls, Radius.circular(s * 0.2)),
-      Paint()..color = const Color(0xFF6D4C41),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(walls, Radius.circular(s * 0.2)),
-      Paint()
-        ..color = _kOutline
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = (s * 0.12).clamp(1.2, 2.8),
-    );
+    if (archVariant == 0) {
+      // Variant 0: Grand Traditional Savoie Timber Chalet with Carved Balcony & Arched Door
+      final Rect walls = Rect.fromCenter(
+        center: Offset(base.x, base.y - h * 0.42),
+        width: w,
+        height: h * 0.84,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(walls, Radius.circular(s * 0.18)),
+        Paint()
+          ..shader = ui.Gradient.linear(
+            Offset(walls.left, walls.top),
+            Offset(walls.left, walls.bottom),
+            const <Color>[Color(0xFF795548), Color(0xFF4E342E)],
+          ),
+      );
+      // Stone foundation plinth
+      final Rect plinth = Rect.fromLTWH(
+        walls.left,
+        walls.bottom - h * 0.16,
+        walls.width,
+        h * 0.16,
+      );
+      canvas.drawRect(plinth, Paint()..color = const Color(0xFF607D8B));
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(walls, Radius.circular(s * 0.18)),
+        outline,
+      );
 
-    // Warm golden lit chalet windows
-    for (final double wxOff in <double>[-0.24, 0.24]) {
-      final Rect win = Rect.fromCenter(
-        center: Offset(base.x + w * wxOff, base.y - h * 0.44),
+      // Arched oak front door
+      final Rect door = Rect.fromCenter(
+        center: Offset(base.x, base.y - h * 0.20),
+        width: w * 0.18,
+        height: h * 0.36,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndCorners(
+          door,
+          topLeft: Radius.circular(w * 0.09),
+          topRight: Radius.circular(w * 0.09),
+        ),
+        Paint()..color = const Color(0xFF3E2723),
+      );
+
+      // Warm golden lit chalet windows
+      for (final double wxOff in <double>[-0.27, 0.27]) {
+        final Rect win = Rect.fromCenter(
+          center: Offset(base.x + w * wxOff, base.y - h * 0.50),
+          width: w * 0.20,
+          height: h * 0.26,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(win, Radius.circular(s * 0.08)),
+          Paint()..color = const Color(0xFFFFE082),
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(win, Radius.circular(s * 0.08)),
+          Paint()
+            ..color = _kOutline
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = (s * 0.06).clamp(0.7, 1.8),
+        );
+      }
+
+      // Carved wooden Alpine balcony across upper facade
+      final Rect balcony = Rect.fromCenter(
+        center: Offset(base.x, base.y - h * 0.40),
+        width: w * 0.88,
+        height: h * 0.10,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(balcony, Radius.circular(s * 0.05)),
+        Paint()..color = const Color(0xFF5D4037),
+      );
+      canvas.drawLine(
+        Offset(balcony.left, balcony.top),
+        Offset(balcony.right, balcony.top),
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.90)
+          ..strokeWidth = (s * 0.09).clamp(0.8, 2.2)
+          ..strokeCap = StrokeCap.round,
+      );
+
+      // Thick snowy Alpine gable roof
+      final Path roof = Path()
+        ..moveTo(base.x, base.y - h * 1.20)
+        ..lineTo(base.x + w * 0.65, base.y - h * 0.68)
+        ..lineTo(base.x - w * 0.65, base.y - h * 0.68)
+        ..close();
+      canvas.drawPath(roof, Paint()..color = Colors.white);
+      canvas.drawPath(roof, outline);
+    } else if (archVariant == 1) {
+      // Variant 1: 2-Story Grand Alpine Hotel / Refuge with Snow-Capped Bell-Turret (`Clocheton`)
+      final Rect walls = Rect.fromCenter(
+        center: Offset(base.x, base.y - h * 0.44),
+        width: w,
+        height: h * 0.88,
+      );
+      // Cream alpine stucco upper story + dark larch ground floor
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(walls, Radius.circular(s * 0.16)),
+        Paint()..color = const Color(0xFFF5EFE6),
+      );
+      final Rect groundStory = Rect.fromLTWH(
+        walls.left,
+        walls.bottom - h * 0.34,
+        walls.width,
+        h * 0.34,
+      );
+      canvas.drawRect(groundStory, Paint()..color = const Color(0xFF5D4037));
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(walls, Radius.circular(s * 0.16)),
+        outline,
+      );
+
+      // Gold hotel crest plaque above entrance
+      final Rect crest = Rect.fromCenter(
+        center: Offset(base.x, base.y - h * 0.34),
+        width: w * 0.34,
+        height: h * 0.08,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(crest, Radius.circular(s * 0.05)),
+        Paint()..color = const Color(0xFFFFD54F),
+      );
+
+      // 2 rows × 3 columns of warm glowing hotel windows
+      for (final double wyFrac in <double>[0.64, 0.20]) {
+        for (final double wxOff in <double>[-0.30, 0.0, 0.30]) {
+          if (wyFrac < 0.30 && wxOff == 0.0) {
+            // Grand double lobby doors at ground center
+            final Rect lobby = Rect.fromCenter(
+              center: Offset(base.x, base.y - h * 0.15),
+              width: w * 0.20,
+              height: h * 0.28,
+            );
+            canvas.drawRRect(
+              RRect.fromRectAndRadius(lobby, Radius.circular(s * 0.06)),
+              Paint()..color = const Color(0xFFFFECB3),
+            );
+            continue;
+          }
+          final Rect win = Rect.fromCenter(
+            center: Offset(base.x + w * wxOff, base.y - h * wyFrac),
+            width: w * 0.15,
+            height: h * 0.17,
+          );
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(win, Radius.circular(s * 0.06)),
+            Paint()..color = const Color(0xFFFFE082),
+          );
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(win, Radius.circular(s * 0.06)),
+            Paint()
+              ..color = _kOutline
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = (s * 0.05).clamp(0.6, 1.5),
+          );
+        }
+      }
+
+      // Main snowy hotel gable roof
+      final Path roof = Path()
+        ..moveTo(base.x, base.y - h * 1.14)
+        ..lineTo(base.x + w * 0.62, base.y - h * 0.78)
+        ..lineTo(base.x - w * 0.62, base.y - h * 0.78)
+        ..close();
+      canvas.drawPath(roof, Paint()..color = Colors.white);
+      canvas.drawPath(roof, outline);
+
+      // Central wooden Bell-Turret / Clocktower (`clocheton d'horloge`) + snowy spire
+      final Rect turret = Rect.fromCenter(
+        center: Offset(base.x, base.y - h * 1.18),
         width: w * 0.22,
-        height: h * 0.28,
+        height: h * 0.26,
       );
       canvas.drawRRect(
-        RRect.fromRectAndRadius(win, Radius.circular(s * 0.1)),
-        Paint()..color = const Color(0xFFFFE082),
+        RRect.fromRectAndRadius(turret, Radius.circular(s * 0.05)),
+        Paint()..color = const Color(0xFF6D4C41),
       );
       canvas.drawRRect(
-        RRect.fromRectAndRadius(win, Radius.circular(s * 0.1)),
+        RRect.fromRectAndRadius(turret, Radius.circular(s * 0.05)),
+        outline,
+      );
+      canvas.drawCircle(
+        turret.center,
+        w * 0.055,
+        Paint()..color = const Color(0xFFFFF59D),
+      );
+      final Path spire = Path()
+        ..moveTo(base.x, base.y - h * 1.52)
+        ..lineTo(base.x + w * 0.16, turret.top + s * 0.04)
+        ..lineTo(base.x - w * 0.16, turret.top + s * 0.04)
+        ..close();
+      canvas.drawPath(spire, Paint()..color = Colors.white);
+      canvas.drawPath(spire, outline);
+    } else {
+      // Variant 2: Luxury Après-Ski Boutique Chalet with `LV_NEO` Striped Awning & Arched Bay Window
+      final Rect walls = Rect.fromCenter(
+        center: Offset(base.x, base.y - h * 0.43),
+        width: w,
+        height: h * 0.86,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(walls, Radius.circular(s * 0.18)),
+        Paint()..color = const Color(0xFF8D6E63),
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(walls, Radius.circular(s * 0.18)),
+        outline,
+      );
+
+      // Glowing Panoramic Arched Boutique Display Window
+      final Rect bayWin = Rect.fromCenter(
+        center: Offset(base.x, base.y - h * 0.24),
+        width: w * 0.56,
+        height: h * 0.38,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndCorners(
+          bayWin,
+          topLeft: Radius.circular(w * 0.20),
+          topRight: Radius.circular(w * 0.20),
+          bottomLeft: Radius.circular(s * 0.06),
+          bottomRight: Radius.circular(s * 0.06),
+        ),
+        Paint()
+          ..shader = ui.Gradient.linear(
+            Offset(bayWin.left, bayWin.top),
+            Offset(bayWin.right, bayWin.bottom),
+            const <Color>[Color(0xFFFFF9C4), Color(0xFFFFCA28)],
+          ),
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndCorners(
+          bayWin,
+          topLeft: Radius.circular(w * 0.20),
+          topRight: Radius.circular(w * 0.20),
+          bottomLeft: Radius.circular(s * 0.06),
+          bottomRight: Radius.circular(s * 0.06),
+        ),
         Paint()
           ..color = _kOutline
           ..style = PaintingStyle.stroke
-          ..strokeWidth = (s * 0.06).clamp(0.8, 1.8),
+          ..strokeWidth = (s * 0.06).clamp(0.7, 1.8),
       );
+
+      // Striped Crimson/Cobalt & Ivory Boutique Awning (`store banne rayé`)
+      final Color stripeAccent =
+          prop.id.isEven ? const Color(0xFFC62828) : _kLvNeoCobalt;
+      final double awningTop = base.y - h * 0.52;
+      final double awningBot = base.y - h * 0.38;
+      final double awningLeft = base.x - w * 0.42;
+      final double awningWidth = w * 0.84;
+      const int stripeCount = 5;
+      for (int st = 0; st < stripeCount; st++) {
+        final Rect sr = Rect.fromLTWH(
+          awningLeft + awningWidth * (st / stripeCount),
+          awningTop,
+          awningWidth / stripeCount,
+          awningBot - awningTop,
+        );
+        canvas.drawRect(
+          sr,
+          Paint()..color = st.isEven ? stripeAccent : const Color(0xFFFFFDF7),
+        );
+      }
+      canvas.drawRect(
+        Rect.fromLTWH(awningLeft, awningTop, awningWidth, awningBot - awningTop),
+        Paint()
+          ..color = _kOutline
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = (s * 0.06).clamp(0.7, 1.8),
+      );
+
+      // Warm festive gold string lights under eaves
+      if (s > 0.9) {
+        for (int b = -3; b <= 3; b++) {
+          canvas.drawCircle(
+            Offset(base.x + w * (b * 0.13), base.y - h * 0.68),
+            (s * 0.10).clamp(0.9, 2.8),
+            Paint()..color = const Color(0xFFFFEB3B),
+          );
+        }
+      }
+
+      // Steep Alpine Snowy Chalet Roof
+      final Path roof = Path()
+        ..moveTo(base.x, base.y - h * 1.22)
+        ..lineTo(base.x + w * 0.66, base.y - h * 0.70)
+        ..lineTo(base.x - w * 0.66, base.y - h * 0.70)
+        ..close();
+      canvas.drawPath(roof, Paint()..color = Colors.white);
+      canvas.drawPath(roof, outline);
     }
 
-    // Thick snowy Alpine gable roof
-    final Path roof = Path()
-      ..moveTo(base.x, base.y - h * 1.18)
-      ..lineTo(base.x + w * 0.64, base.y - h * 0.68)
-      ..lineTo(base.x - w * 0.64, base.y - h * 0.68)
-      ..close();
-    canvas.drawPath(roof, Paint()..color = Colors.white);
-    canvas.drawPath(
-      roof,
-      Paint()
-        ..color = _kOutline
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = (s * 0.12).clamp(1.2, 2.8)
-        ..strokeJoin = StrokeJoin.round,
+    // Soft snow cushion along building foundation
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(base.x, base.y + s * 0.04),
+          width: w * 1.06,
+          height: (s * 0.28).clamp(1.2, 8.0),
+        ),
+        Radius.circular(s * 0.14),
+      ),
+      Paint()..color = track.snowBrightColor.withValues(alpha: 0.92),
     );
   }
 
@@ -2877,13 +3526,17 @@ class Ski3DPainter extends CustomPainter {
     _ProjectedPoint3D Function(double x, double y, double z) project,
   ) {
     final double wx = engine.playerWorldX;
-    final _ProjectedPoint3D groundPt = project(wx, 0.0, engine.playerZ);
+    final double surfaceY = engine.playerGroundY;
+    final double effectiveSkierY = math.max(engine.playerY, surfaceY);
+    final double clearanceAboveSurface =
+        math.max(0.0, effectiveSkierY - surfaceY);
+    final _ProjectedPoint3D groundPt = project(wx, surfaceY, engine.playerZ);
     final _ProjectedPoint3D skierPt =
-        project(wx, engine.playerY, engine.playerZ);
+        project(wx, effectiveSkierY, engine.playerZ);
 
     final double s = skierPt.scale;
     final VivienneSkiEdition edition = engine.selectedEdition;
-    final bool isAirborne = engine.playerY > 0.35;
+    final bool isAirborne = engine.isAirborne;
 
     // Special Cartoon 3D Snowball Crash State (`VivienneSkiAnimState.snowballCrash`)!
     if (engine.isInSnowballCrash) {
@@ -2891,9 +3544,9 @@ class Ski3DPainter extends CustomPainter {
       return;
     }
 
-    // 4.1 Ground Shadow Ellipse (shrinks & fades realistically when jumping!)
+    // 4.1 Ground / Ramp-Deck Shadow Ellipse (projects onto `surfaceY` and shrinks when airborne!)
     final double airAttenuation =
-        (1.0 / (1.0 + engine.playerY * 0.32)).clamp(0.28, 1.0);
+        (1.0 / (1.0 + clearanceAboveSurface * 0.32)).clamp(0.28, 1.0);
     canvas.drawOval(
       Rect.fromCenter(
         center: Offset(groundPt.x, groundPt.y + s * 0.10),

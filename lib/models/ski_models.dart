@@ -78,7 +78,7 @@ enum VivienneSpectatorCheerStyle {
   doubleJumpCheer,
 }
 
-/// The 3 completely skiable 3D Alpine tracks in `VIVI AU SKI : Descente Royale 3D` (`v1.4.0`).
+/// The 3 completely skiable 3D Alpine tracks in `VIVI AU SKI : Descente Royale 3D` (`v1.5.0`).
 enum SkiTrackId {
   greenBlossomValley(
     id: 'piste_verte',
@@ -88,7 +88,7 @@ enum SkiTrackId {
     difficultyLabel: 'PISTE VERTE • DÉBUTANT',
     summaryMetrics: '1 200 m • -535 m (24°) • 22 Bosses • 6 Tremplins',
     description:
-        'Ciel azur alpin, crêtes & murs à 24° (-535 m), 22 bosses intégrées, 6 tremplins (3 tailles), 28 portes Slalom et foule Vivienne 3D.',
+        'Ciel azur alpin, crêtes & murs à 24° (-535 m), 22 bosses fondues, 6 tremplins intégrés, 3 télésièges et village alpin d\'arrivée.',
     lengthMeters: 1200.0,
     verticalDropMeters: 535.0,
     slopeDegrees: 24.0,
@@ -98,6 +98,7 @@ enum SkiTrackId {
     trackHalfWidthMeters: 15.5,
     curveAmplitudeMeters: 9.5,
     pineTreeCount: 42,
+    cableCarCount: 3,
     mogulCount: 22,
     jumpRampCount: 6,
     slalomGateCount: 12,
@@ -127,7 +128,7 @@ enum SkiTrackId {
     difficultyLabel: 'PISTE BLEUE • CARVING',
     summaryMetrics: '1 800 m • -980 m (34°) • 34 Bosses • 9 Tremplins',
     description:
-        'Soleil couchant doré, cassures de pente à 34° (-980 m), 34 bosses maillées, 9 tremplins (3 tailles), 38 portes Slalom et foule Vivienne 3D.',
+        'Soleil couchant doré, cassures de pente à 34° (-980 m), 34 bosses fondues, 9 tremplins intégrés, 4 télésièges et village alpin d\'arrivée.',
     lengthMeters: 1800.0,
     verticalDropMeters: 980.0,
     slopeDegrees: 34.0,
@@ -137,6 +138,7 @@ enum SkiTrackId {
     trackHalfWidthMeters: 14.0,
     curveAmplitudeMeters: 14.0,
     pineTreeCount: 70,
+    cableCarCount: 4,
     mogulCount: 34,
     jumpRampCount: 9,
     slalomGateCount: 16,
@@ -166,7 +168,7 @@ enum SkiTrackId {
     difficultyLabel: 'PISTE NOIRE OR • EXPERT',
     summaryMetrics: '2 500 m • -1 650 m (45°) • 48 Bosses • 12 Tremplins',
     description:
-        'Nuit étoilée & aurore boréale, murs plongeants à 45° (-1 650 m), 48 bosses, 12 tremplins Big Air, 50 portes Slalom et foule Vivienne 3D.',
+        'Nuit étoilée & aurore boréale, murs plongeants à 45° (-1 650 m), 48 bosses fondues, 12 tremplins Big Air, 5 télésièges et village alpin d\'arrivée.',
     lengthMeters: 2500.0,
     verticalDropMeters: 1650.0,
     slopeDegrees: 45.0,
@@ -176,6 +178,7 @@ enum SkiTrackId {
     trackHalfWidthMeters: 12.8,
     curveAmplitudeMeters: 18.0,
     pineTreeCount: 98,
+    cableCarCount: 5,
     mogulCount: 48,
     jumpRampCount: 12,
     slalomGateCount: 22,
@@ -215,6 +218,7 @@ enum SkiTrackId {
     required this.trackHalfWidthMeters,
     required this.curveAmplitudeMeters,
     required this.pineTreeCount,
+    required this.cableCarCount,
     required this.mogulCount,
     required this.jumpRampCount,
     required this.slalomGateCount,
@@ -253,6 +257,7 @@ enum SkiTrackId {
   final double trackHalfWidthMeters;
   final double curveAmplitudeMeters;
   final int pineTreeCount;
+  final int cableCarCount;
   final int mogulCount;
   final int jumpRampCount;
   final int slalomGateCount;
@@ -542,7 +547,14 @@ enum VivienneBlenderPose {
   final String assetPath;
 }
 
-/// 3D Scenery, Obstacle & Spectator kinds placed along the ski tracks (`v1.4.0`).
+/// 3D Pine Tree Collision Zone (`v1.5.0`): Orange Piste Safety Pad, Conical Foliage Branches, or Crown/Treetop.
+enum PineCollisionZone {
+  orangePad,
+  branch,
+  treetop,
+}
+
+/// 3D Scenery, Obstacle & Spectator kinds placed along the ski tracks (`v1.5.0`).
 enum SkiPropKind {
   alpinePineTree,
   giantSnowPine,

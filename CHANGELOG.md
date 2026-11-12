@@ -1,5 +1,24 @@
 # Changelog — Vivi au Ski 3D (`cloud.orbital8.vivi_au_ski`)
 
+## [v1.5.0] (`1.5.0+6`) - 2026-11-12
+
+### Added, Changed & Fixed
+- **Z-Order & Physique des Rampes d'Accélération / Tremplins : Vivienne Toujours Au-Dessus (`ORB-74` / `ORB-73` — @Carbon)** :
+  - Extraction et sécurisation de la file de tri Z dans `Ski3DPainter._buildSortedRenderItems` (`lib/painters/ski_3d_painter.dart`) avec vérification publique `debugIsVivienneRenderedAboveAllRamps()`, garantissant qu'**aucune rampe (`_DepthActorKind.jumpRamp`) ni bosse (`_DepthActorKind.mogul`) n'est jamais dessinée après (`par-dessus`) `_DepthActorKind.viviennePlayer`**, que Vivienne aborde la rampe, grimpe le tablier, franchisse la lèvre d'envol ou survole un tremplin.
+  - Ajout de `rampDeckElevationAt`, `groundSurfaceHeightAt` et `playerGroundY` dans `SkiGameEngine` (`lib/engine/ski_game_engine.dart`) avec tolérance latérale étendue (`width * 0.68`) : maintien strict `playerY >= deckY` sur tout `[zStart, zEnd]` et projection de l'ombre (`groundPt`) ainsi que des traces de skis sur l'altitude réelle du tablier incliné.
+- **Matelas de Sécurité Orange Devant les Sapins de Piste & Collision 3D Intégrale (`lib/painters/ski_3d_painter.dart`, `lib/engine/ski_game_engine.dart`)** :
+  - Rendu 3D Cartoon d'un matelas de protection cylindrique orange matelassé (`_paintPineSafetyMattress3D` : dégradé `#E65100 -> #FFAB40 -> #FF6D00 -> #DD2C00`, boudins verticaux surpiqués, doubles sangles jaune sécurité `#FFD600` / noir `#2B1105` et bourrelet de neige au pied) placé devant chaque sapin situé sur la piste (`isOnPiste: true`).
+  - Suppression du plafond `playerY < 1.55` et implémentation de `checkPineTreeCollision` (`PineCollisionZone`) déclenchant immédiatement `_triggerSnowballCrash()` lors d'un impact contre **(A)** le matelas orange avant (`orangePad`), **(B)** le volume conique des branches (`branch`, `0 .. 0.82 * treeHeight`) ou **(C)** le haut / la cime du sapin en plein saut (`treetop`, `0.82 * treeHeight .. treeHeight + 0.35`).
+- **Village Alpin d'Arrivée Étoffé (`16` Bâtiments & `3` Variantes Architecturales)** :
+  - Génération de `16` bâtiments `SkiPropKind.alpineChalet` encadrant l'approche finale (`length - 82 m .. length - 11 m`) et formant un hameau en amphithéâtre derrière l'arche d'`ARRIVÉE` (`length + 13 m .. length + 68 m`), avec seuil de visibilité longue distance abaissé (`s >= 0.36`) et évitement automatique des sapins de bordure.
+  - Implémentation de 3 architectures alpines distinctes dans `_paintAlpineChalet3D` : **Chalet traditionnel en bois sculpté** à balcon et cheminée fumante (`variant 0`), **Hôtel-refuge alpin à 2 étages** à crépi crème et clocheton d'horloge enneigé (`variant 1`), et **Chalet boutique après-ski** à store banne rayé `LV_NEO`, vitrine cintrée illuminée et guirlandes lumineuses (`variant 2`).
+- **Limitation Stricte des Télésièges Traversant la Piste (`2` à `5` Max)** :
+  - Ajout de `SkiTrackId.cableCarCount` limitant le nombre de systèmes de télésièges (`SkiPropKind.cableCarPylon`) à exactement **`3`** sur la Piste Verte, **`4`** sur la Piste Bleue et **`5`** sur la Piste Noire Or (espacés régulièrement entre `155 m` et `length - 145 m`).
+- **Intégration Visuelle Organique des Petites Bosses & Tremplins dans la Piste** :
+  - Augmentation de la résolution du maillage de piste à `_kPisteCols = 16` colonnes transversales (`_kSliceCount = 88`).
+  - Suppression de l'ombre ovale sombre flottante et du contour bleu dur `#3979A8` dans `_paintMogul3D` au profit d'un dôme de neige fondu à `alpha: 0.0` sur son pourtour et de nervures de damage 3D courbées.
+  - Ajout de talus latéraux de neige (`snow buttresses`) sur toutes les tailles de tremplins (`small`, `medium`, `large`), d'une jupe de transition neigeuse à l'entrée et suppression du trait noir transversal au pied des rampes dans `_paintJumpRamp3D`.
+
 ## [v1.4.0] (`1.4.0+5`) - 2026-11-12
 
 ### Added, Changed & Fixed

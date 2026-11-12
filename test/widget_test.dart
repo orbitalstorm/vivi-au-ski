@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vivi_au_ski/engine/ski_game_engine.dart';
 import 'package:vivi_au_ski/main.dart';
 import 'package:vivi_au_ski/models/ski_models.dart';
+import 'package:vivi_au_ski/painters/ski_3d_painter.dart';
 import 'package:vivi_au_ski/painters/vivienne_3d_volumetric_rig.dart';
 
 Future<void> _loadRealFlutterFonts() async {
@@ -652,8 +653,189 @@ void main() {
     },
   );
 
+  test(
+    'v1.5.0 Vivienne Always Above Ramps (Z-Order & Deck Physics), Orange Safety Pads & Full 3D Pine Collisions (Pad/Branch/Treetop), 16-Building Finish Village & 2..5 Chairlifts',
+    () {
+      final SkiGameEngine engine = SkiGameEngine(seed: 2026);
+      final Ski3DPainter painter = Ski3DPainter(engine: engine);
+
+      for (final SkiTrackId track in SkiTrackId.values) {
+        engine.startRun(
+          track: track,
+          mode: SkiGameMode.descenteBosses,
+        );
+
+        // 1. Chairlift count (`SkiPropKind.cableCarPylon`) strictly bounded between 2 and 5 (`ORB-74` Req #4)
+        final List<SkiWorldProp3D> chairlifts = engine.worldProps
+            .where((SkiWorldProp3D p) => p.kind == SkiPropKind.cableCarPylon)
+            .toList();
+        expect(
+          chairlifts.length,
+          inInclusiveRange(2, 5),
+          reason: '$track must have between 2 and 5 chairlifts max',
+        );
+        expect(chairlifts.length, equals(track.cableCarCount));
+
+        // 2. Expanded Finish Village (`16` buildings, 3 variants, flanking approach + amphitheater behind finish arch) (`ORB-74` Req #3)
+        final List<SkiWorldProp3D> villageBuildings = engine.worldProps
+            .where(
+              (SkiWorldProp3D p) =>
+                  p.kind == SkiPropKind.alpineChalet &&
+                  p.z >= track.lengthMeters - 90.0,
+            )
+            .toList();
+        expect(
+          villageBuildings.length,
+          greaterThanOrEqualTo(14),
+          reason: '$track arrival village must feature >= 14 Alpine buildings',
+        );
+        final Set<int> archVariants =
+            villageBuildings.map((SkiWorldProp3D p) => p.variant % 3).toSet();
+        expect(archVariants, containsAll(<int>[0, 1, 2]));
+        expect(
+          villageBuildings.any((SkiWorldProp3D p) => p.z < track.lengthMeters),
+          isTrue,
+          reason: 'Village must flank the final approach before Finish Arch',
+        );
+        expect(
+          villageBuildings.any((SkiWorldProp3D p) => p.z > track.lengthMeters),
+          isTrue,
+          reason: 'Village must form a resort backdrop behind Finish Arch',
+        );
+
+        // 3. Vivienne ALWAYS rendered above ALL ramps + continuous ramp deck elevation (`ORB-74` Req #1)
+        for (final SkiJumpRamp3D ramp in engine.jumpRamps) {
+          final double zStart = ramp.z - ramp.length * 0.5;
+          final double zEnd = ramp.z + ramp.length * 0.5;
+          for (final double sampleZ in <double>[
+            zStart - 1.2,
+            zStart + 0.4,
+            ramp.z,
+            zEnd - 0.3,
+            zEnd + 1.4,
+          ]) {
+            engine.playerZ = sampleZ;
+            engine.playerLateralOffset =
+                ramp.x - engine.trackCenterOffsetX(sampleZ);
+            engine.playerY = engine.groundSurfaceHeightAt(ramp.x, sampleZ);
+            expect(
+              painter.debugIsVivienneRenderedAboveAllRamps(),
+              isTrue,
+              reason:
+                  'Vivienne must NEVER be painted underneath ramp #${ramp.id} at z=$sampleZ on $track',
+            );
+          }
+
+          // Simulate riding right up the ramp deck from entrance to launch lip
+          engine.playerZ = zStart + 0.05;
+          engine.playerLateralOffset =
+              ramp.x - engine.trackCenterOffsetX(engine.playerZ);
+          engine.playerY = 0.0;
+          engine.playerVy = 0.0;
+          for (int tick = 0; tick < 18 && engine.playerZ <= zEnd; tick++) {
+            engine.update(1 / 60);
+            if (engine.playerZ >= zStart && engine.playerZ <= zEnd) {
+              final double deckY = engine.rampDeckElevationAt(
+                engine.playerWorldX,
+                engine.playerZ,
+              );
+              expect(
+                engine.playerY,
+                greaterThanOrEqualTo(deckY - 1e-6),
+                reason:
+                    'Vivienne playerY must stay >= ramp deckY while climbing ramp #${ramp.id}',
+              );
+              expect(
+                engine.playerGroundY,
+                greaterThanOrEqualTo(deckY - 1e-6),
+              );
+              expect(painter.debugIsVivienneRenderedAboveAllRamps(), isTrue);
+            }
+          }
+        }
+
+        // 4. On-Piste Pine Trees with Orange Safety Pads & Full 3D Collisions (`ORB-74` Req #2):
+        //    Verify crashes on (A) Orange Pad, (B) Foliage Branches, and (C) Treetop in Midair!
+        final List<SkiWorldProp3D> onPistePines = engine.worldProps
+            .where(
+              (SkiWorldProp3D p) =>
+                  (p.kind == SkiPropKind.alpinePineTree ||
+                      p.kind == SkiPropKind.giantSnowPine) &&
+                  p.isOnPiste,
+            )
+            .toList();
+        expect(
+          onPistePines.length,
+          greaterThanOrEqualTo(6),
+          reason: '$track must place on-piste pine trees with orange safety pads',
+        );
+
+        final SkiWorldProp3D testPine = onPistePines.first;
+        final double treeFullH =
+            (testPine.kind == SkiPropKind.giantSnowPine ? 7.4 : 5.8) *
+                testPine.scale;
+
+        // Case A: Hitting the Orange Safety Mattress in front of the pine tree (`z < tree.z`)
+        engine.startRun(track: track);
+        engine.playerZ = testPine.z - 1.15 * testPine.scale;
+        engine.playerLateralOffset =
+            testPine.x - engine.trackCenterOffsetX(engine.playerZ);
+        engine.playerY = 0.15;
+        engine.playerVy = 0.0;
+        for (int step = 0; step < 6 && !engine.isInSnowballCrash; step++) {
+          engine.playerLateralOffset =
+              testPine.x - engine.trackCenterOffsetX(engine.playerZ);
+          engine.update(1 / 60);
+        }
+        expect(
+          engine.isInSnowballCrash,
+          isTrue,
+          reason: 'Touching the orange safety pad on $track must trigger crash',
+        );
+        expect(
+          engine.lastPineCollisionZone,
+          equals(PineCollisionZone.orangePad),
+        );
+
+        // Case B: Hitting a mid-height Conical Pine Branch (`0 .. 0.82 * treeFullH`)
+        engine.startRun(track: track);
+        engine.playerZ = testPine.z - 0.15;
+        engine.playerY = treeFullH * 0.48;
+        engine.playerVy = 0.0;
+        final double branchOffset = 0.62 * testPine.scale;
+        engine.playerLateralOffset = (testPine.x + branchOffset) -
+            engine.trackCenterOffsetX(engine.playerZ);
+        engine.update(1 / 60);
+        expect(
+          engine.isInSnowballCrash,
+          isTrue,
+          reason: 'Touching a conical pine branch on $track must trigger crash',
+        );
+        expect(engine.lastPineCollisionZone, equals(PineCollisionZone.branch));
+
+        // Case C: Hitting the Treetop / Crown high in midair (`> 0.82 * treeFullH`, well above old 1.55m limit!)
+        engine.startRun(track: track);
+        engine.playerZ = testPine.z - 0.15;
+        engine.playerY = treeFullH * 0.90;
+        expect(engine.playerY, greaterThan(2.5));
+        engine.playerVy = 0.0;
+        engine.playerLateralOffset =
+            (testPine.x + 0.12 * testPine.scale) -
+                engine.trackCenterOffsetX(engine.playerZ);
+        engine.update(1 / 60);
+        expect(
+          engine.isInSnowballCrash,
+          isTrue,
+          reason:
+              'Touching the top/crown of a pine tree in midair on $track must trigger crash',
+        );
+        expect(engine.lastPineCollisionZone, equals(PineCollisionZone.treetop));
+      }
+    },
+  );
+
   testWidgets(
-    'v1.4.0 Relief Crest Occlusion, Full Slalom Mode, 3 Ramp Tiers, 3D Vivienne Spectators & 6 Store Screenshots (1080x2400)',
+    'v1.5.0 Vivienne Above Ramps, Orange Safety Pads, 16-Building Finish Village, Full Slalom & 6 Store Screenshots (1080x2400)',
     (WidgetTester tester) async {
       await tester.binding.setSurfaceSize(const Size(360, 800));
       addTearDown(() async => tester.binding.setSurfaceSize(null));
@@ -738,18 +920,16 @@ void main() {
       await tester.tap(find.byKey(const Key('close_turntable_gallery_button')));
       await tester.pump(const Duration(milliseconds: 120));
 
-      // 2. Screenshot 02: Convex Snow Crest Masking Background + Integrated 3D Moguls + Parallel Carving + 3D Vivienne Spectators!
-      // At `playerZ ≈ 184 m` approaching the `z ≈ 242 m` convex crest, the snow ridge rises above `horizonY`
-      // masking the lower background mountains while showing mesh-deformed moguls & cheering 3D Viviennes!
+      // 2. Screenshot 02: Expanded 16-Building Alpine Finish Village + On-Piste Pine Orange Safety Pad + Seamless 3D Moguls + Parallel Carving!
       engine.selectEdition(VivienneSkiEdition.speedyV03);
       engine.startRun(
         track: SkiTrackId.greenBlossomValley,
         mode: SkiGameMode.descenteBosses,
       );
-      engine.playerZ = 178.0;
-      engine.playerLateralOffset = -2.8;
+      engine.playerZ = 1142.0;
+      engine.playerLateralOffset = 1.6;
       engine.setManualTilt(0.66);
-      for (int i = 0; i < 16; i++) {
+      for (int i = 0; i < 12; i++) {
         engine.update(1 / 60);
       }
       expect(engine.animState, equals(VivienneSkiAnimState.carvingRight));
@@ -761,9 +941,7 @@ void main() {
       );
       engine.clearManualTilt();
 
-      // 3. Screenshot 03: Full Slalom Mode (`SkiGameMode.slalomComplet`) on Steep Plunging Wall!
-      // Shows strict Left (`G1`/`G3` Red/Gold) & Right (`D2`/`D4` Blue/Azure) gates, S-trajectory & chevrons,
-      // `hud_slalom_counter_badge` (`PORTES 1 / 28 • COMBO ×2` + `DROITE D2 ▶`), parallel carving & 3D Vivienne spectators!
+      // 3. Screenshot 03: Full Slalom Mode (`SkiGameMode.slalomComplet`) with Orange-Padded Piste Pines & Seamless Moguls!
       engine.selectEdition(VivienneSkiEdition.wonderland);
       engine.startRun(
         track: SkiTrackId.greenBlossomValley,
@@ -777,7 +955,6 @@ void main() {
         engine.update(1 / 60);
       }
       expect(engine.slalomPassed, greaterThanOrEqualTo(1));
-      // Advance onto the steep plunging wall (`z ≈ 64m`) looking down at alternating D2 (Right), G3 (Left), D4 (Right)!
       engine.playerZ = 62.0;
       engine.playerLateralOffset = -2.2;
       engine.setManualTilt(0.68);
@@ -793,25 +970,27 @@ void main() {
       );
       engine.clearManualTilt();
 
-      // 4. Screenshot 04: Plunging Downhill Wall + All 3 Ramp Sizes (`small`, `medium`, `large`) + 3D Moguls + `Giant Denim` Big Air!
-      // Launching off Ramp #0 (`small` at `68 m`) while Ramp #1 (`medium` at `104 m`) & Ramp #2 (`large` Big Air at `144 m`)
-      // plunge down into the valley below, flanked by cheering 3D Vivienne spectators!
+      // 4. Screenshot 04: Vivienne Rendered ON TOP OF Ramp #0 (`small` sculpted snow kicker) + `medium` & `large` Ramps + Orange Pine Pads + Single Distant Chairlift!
       engine.selectEdition(VivienneSkiEdition.giantDenim);
       engine.startRun(
         track: SkiTrackId.blueAsnieresForest,
         mode: SkiGameMode.descenteBosses,
       );
       final SkiJumpRamp3D targetRamp = engine.jumpRamps.first;
-      engine.playerZ = targetRamp.z + 2.0;
+      engine.playerZ = targetRamp.z - 1.2;
       engine.playerLateralOffset =
           targetRamp.x - engine.trackCenterOffsetX(engine.playerZ);
-      for (int i = 0; i < 5; i++) {
+      for (int i = 0; i < 3; i++) {
         engine.update(1 / 60);
       }
       engine.triggerBonusJumpForTest(
         trick: SkiAerialTrickKind.saut360,
-        progress: 0.40,
-        apexHeightMeters: 2.95,
+        progress: 0.28,
+        apexHeightMeters: 2.25,
+      );
+      expect(
+        Ski3DPainter(engine: engine).debugIsVivienneRenderedAboveAllRamps(),
+        isTrue,
       );
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.text('SAUT 360° +250'), findsOneWidget);

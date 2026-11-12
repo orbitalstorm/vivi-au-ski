@@ -783,7 +783,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                       ),
                       SizedBox(height: 1),
                       Text(
-                        'DESCENTE ROYALE v1.4 • RELIEF 3D & SLALOM COMPLET',
+                        'DESCENTE ROYALE v1.5 • RELIEF 3D & SLALOM COMPLET',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 9.6,
