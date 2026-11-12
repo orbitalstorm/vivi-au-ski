@@ -1525,21 +1525,24 @@ class Ski3DPainter extends CustomPainter {
     SkiWorldProp3D prop,
     _ProjectedPoint3D Function(double x, double y, double z) project,
   ) {
-    final double skewSlope = (prop.id % 2 == 0) ? 0.26 : -0.26;
-    final double zClip = camZ + 1.65;
-    final double cableZFarMax = camZ + 950.0;
-    final double actorZFarMax = camZ + 290.0;
+    final double skewSlope =
+        track == SkiTrackId.blueAsnieresForest ? -0.56 : 0.56;
+    final double zClip = camZ + 6.5;
+    final double actorZMin = camZ + 14.0;
+    final double cableZFarMax = camZ + 420.0;
+    final double actorZFarMax = camZ + 240.0;
 
     const List<double> pylonOffsets = <double>[
-      -150.0,
-      -95.0,
-      -42.0,
-      42.0,
-      95.0,
-      150.0,
+      -135.0,
+      -78.0,
+      -28.0,
+      28.0,
+      78.0,
+      135.0,
     ];
 
-    double pylonTopHeightAtDx(double dx) => 23.5 + dx * 0.014;
+    double pylonTopHeightAtDx(double dx) =>
+        (19.0 - dx * (skewSlope > 0 ? 0.16 : -0.16)).clamp(7.8, 42.0);
 
     double cableHeightAtDx(double dx) {
       double sag = 0.0;
@@ -1566,11 +1569,11 @@ class Ski3DPainter extends CustomPainter {
       return pylonTopHeightAtDx(dx) - sag;
     }
 
-    // 1. Continuous Infinite Uphill (`+1.6m` Z) & Downhill (`-1.6m` Z) Steel Haul Cables
+    // 1. Continuous Infinite Uphill (`+1.8m` Z) & Downhill (`-1.8m` Z) Steel Haul Cables
     // spanning `-380m..+380m` with exact 3D near-plane clipping (`zClip = camZ + 1.65`)
     // so cables always exit cleanly past the left/right/top screen boundaries!
-    for (final double laneZOffset in const <double>[1.6, -1.6]) {
-      const double stepDx = 12.0;
+    for (final double laneZOffset in const <double>[1.8, -1.8]) {
+      const double stepDx = 10.0;
       for (double dx0 = -380.0; dx0 < 380.0; dx0 += stepDx) {
         final double dx1 = math.min(380.0, dx0 + stepDx);
         double x0 = prop.x + dx0;
@@ -1608,13 +1611,13 @@ class Ski3DPainter extends CustomPainter {
             ..color = laneZOffset > 0
                 ? const Color(0xFF263238)
                 : const Color(0xFF1C262B)
-            ..strokeWidth = (avgScale * 0.085).clamp(0.95, 2.8)
+            ..strokeWidth = (avgScale * 0.095).clamp(1.1, 3.2)
             ..strokeCap = StrokeCap.round,
         );
       }
     }
 
-    // 2. Collect 6 Steel Lattice 3D Pylons + 10 Circulating Carriers (5 Uphill, 5 Downhill)
+    // 2. Collect 6 Steel Lattice 3D Pylons + 20 Circulating Carriers (10 Uphill, 10 Downhill)
     // and sort them strictly back-to-front by world Z!
     final List<(double zSort, bool isPylon, double dx, int slotIndex)>
         liftActors = <(double, bool, double, int)>[];
@@ -1622,24 +1625,26 @@ class Ski3DPainter extends CustomPainter {
     for (int i = 0; i < pylonOffsets.length; i++) {
       final double dx = pylonOffsets[i];
       final double pz = prop.z + dx * skewSlope;
-      if (pz >= zClip + 0.4 && pz <= actorZFarMax) {
+      if (pz >= actorZMin && pz <= actorZFarMax) {
         liftActors.add((pz, true, dx, i));
       }
     }
 
-    // 5 Uphill carriers (`+1.6m` Z) + 5 Downhill carriers (`-1.6m` Z) across `-210m..+210m`
-    for (int i = 0; i < 10; i++) {
-      final bool isUphill = i < 5;
-      final int laneIdx = i % 5;
-      final double phase =
-          (engine.ambientTime * 0.052 + prop.variant * 0.29 + laneIdx * 0.20 + (isUphill ? 0.0 : 0.10)) %
-              1.0;
+    // 8 Uphill carriers (`+1.8m` Z) + 8 Downhill carriers (`-1.8m` Z) across `-160m..+160m`
+    for (int i = 0; i < 16; i++) {
+      final bool isUphill = i < 8;
+      final int laneIdx = i % 8;
+      final double phase = (engine.ambientTime * 0.042 +
+              prop.variant * 0.17 +
+              laneIdx * 0.125 +
+              (isUphill ? 0.0 : 0.06)) %
+          1.0;
       final double dx = isUphill
-          ? (-210.0 + phase * 420.0)
-          : (210.0 - phase * 420.0);
-      final double laneZOffset = isUphill ? 1.6 : -1.6;
+          ? (-160.0 + phase * 320.0)
+          : (160.0 - phase * 320.0);
+      final double laneZOffset = isUphill ? 1.8 : -1.8;
       final double cz = prop.z + dx * skewSlope + laneZOffset;
-      if (cz >= zClip + 0.3 && cz <= actorZFarMax) {
+      if (cz >= actorZMin && cz <= actorZFarMax) {
         liftActors.add((cz, false, dx, i));
       }
     }
@@ -1735,14 +1740,14 @@ class Ski3DPainter extends CustomPainter {
           );
         }
       } else {
-        // Circulating Chairlift / Gondola Cabin (`slotIdx` 0..4 uphill, 5..9 downhill)
-        final bool isUphill = slotIdx < 5;
+        // Circulating Chairlift / Gondola Cabin (`slotIdx` 0..7 uphill, 8..15 downhill)
+        final bool isUphill = slotIdx < 8;
         final double cx = prop.x + dx;
         final double cableY = cableHeightAtDx(dx);
         final _ProjectedPoint3D hangerTop = project(cx, cableY, zWorld);
         final _ProjectedPoint3D cabCenter =
-            project(cx, cableY - 1.48, zWorld);
-        final double cs = cabCenter.scale;
+            project(cx, cableY - 1.65, zWorld);
+        final double cs = cabCenter.scale * 1.25;
         if (cs < 0.55) continue;
 
         final double sway =
@@ -3064,7 +3069,7 @@ class Ski3DPainter extends CustomPainter {
   void _paintFloatingCallouts(Canvas canvas, Size size) {
     for (int i = 0; i < engine.callouts.length; i++) {
       final SkiFloatingCallout c = engine.callouts[i];
-      final double y = size.height * 0.44 - c.progress * 44.0 - i * 26.0;
+      final double y = size.height * 0.27 - c.progress * 32.0 - i * 30.0;
       final double alpha = (1.0 - c.progress * 0.85).clamp(0.0, 1.0);
 
       final TextPainter tp = TextPainter(
@@ -3072,13 +3077,14 @@ class Ski3DPainter extends CustomPainter {
           text: c.text,
           style: TextStyle(
             fontFamily: 'Roboto',
-            fontSize: 16,
+            fontSize: 15,
             fontWeight: FontWeight.w900,
+            letterSpacing: 0.4,
             color: c.color.withValues(alpha: alpha),
             shadows: <Shadow>[
               Shadow(
                 color: _kOutline.withValues(alpha: alpha),
-                offset: const Offset(0, 2),
+                offset: const Offset(0, 1.5),
                 blurRadius: 2,
               ),
             ],
@@ -3086,6 +3092,27 @@ class Ski3DPainter extends CustomPainter {
         ),
         textDirection: TextDirection.ltr,
       )..layout();
+
+      final Rect pillRect = Rect.fromCenter(
+        center: Offset(size.width * 0.5, y + tp.height * 0.5),
+        width: tp.width + 24.0,
+        height: tp.height + 10.0,
+      );
+      final RRect pillRRect = RRect.fromRectAndRadius(
+        pillRect,
+        const Radius.circular(16),
+      );
+      canvas.drawRRect(
+        pillRRect,
+        Paint()..color = const Color(0xFF0A1628).withValues(alpha: 0.82 * alpha),
+      );
+      canvas.drawRRect(
+        pillRRect,
+        Paint()
+          ..color = c.color.withValues(alpha: 0.72 * alpha)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
 
       tp.paint(
         canvas,

@@ -986,7 +986,12 @@ class SkiGameEngine extends ChangeNotifier {
           maxLife: 1.40,
         ),
       );
-    _spawnPowderBurst(count: 12, upwardVy: 5.2);
+    _spawnPowderBurst(
+      count: 10,
+      upwardVy: 4.2,
+      spawnY: 0.22,
+      spawnZ: playerZ - p * 6.5,
+    );
     notifyListeners();
   }
 
@@ -1074,16 +1079,20 @@ class SkiGameEngine extends ChangeNotifier {
     required int count,
     required double upwardVy,
     bool includePineNeedles = false,
+    double? spawnY,
+    double? spawnZ,
   }) {
     final double wx = playerWorldX;
+    final double baseY = spawnY ?? math.min(0.42, math.max(0.18, playerY + 0.10));
+    final double baseZ = spawnZ ?? playerZ;
     for (int i = 0; i < count && snowParticles.length < 165; i++) {
       final double angle = (i / count) * math.pi * 2.0;
       final bool isNeedle = includePineNeedles && (i % 3 == 1);
       snowParticles.add(
         SkiSnowParticle3D(
           x: wx + math.cos(angle) * 0.55,
-          y: math.max(0.18, playerY + 0.12),
-          z: playerZ + math.sin(angle) * 0.55,
+          y: baseY,
+          z: baseZ + math.sin(angle) * 0.55,
           vx: math.cos(angle) * (2.8 + (i % 3) * 1.25),
           vy: upwardVy * (0.65 + (i % 4) * 0.14),
           vz: math.sin(angle) * 2.2,
@@ -1410,7 +1419,7 @@ class SkiGameEngine extends ChangeNotifier {
     //     Waving Cartoon Snowmen (`cartoonSnowman`), Fluttering Pennants & Supporters (`flutteringPennantPost`),
     //     Active Snow Cannons (`snowCannon`) & Illuminated Mid-Slope Chalets (`alpineChalet`)
     int cableIdx = 0;
-    for (double cz = 116.0; cz <= length - 75.0; cz += 175.0) {
+    for (double cz = 80.0; cz <= length - 65.0; cz += 130.0) {
       worldProps.add(
         SkiWorldProp3D(
           id: nextPropId++,

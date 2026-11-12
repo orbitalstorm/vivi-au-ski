@@ -352,7 +352,7 @@ void main() {
       final SkiWorldProp3D firstChairlift = engine.worldProps.firstWhere(
         (SkiWorldProp3D p) => p.kind == SkiPropKind.cableCarPylon,
       );
-      engine.playerZ = firstChairlift.z - 56.0;
+      engine.playerZ = firstChairlift.z - 48.0;
       engine.playerLateralOffset = -2.2;
       engine.setManualTilt(0.38);
       for (int i = 0; i < 22; i++) {
