@@ -1,25 +1,97 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
     <linearGradient id="pedestalWoodGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#E3A17B" />
-      <stop offset="50%" stop-color="#C89D7C" />
-      <stop offset="100%" stop-color="#8D5B3C" />
+      <stop offset="0%" stop-color="#F5CBA7" />
+      <stop offset="35%" stop-color="#E3A17B" />
+      <stop offset="70%" stop-color="#B9774E" />
+      <stop offset="100%" stop-color="#6E472B" />
     </linearGradient>
     <linearGradient id="orbitGoldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#FFF59D" />
-      <stop offset="100%" stop-color="#FFB300" />
+      <stop offset="0%" stop-color="#FFFDE7" />
+      <stop offset="30%" stop-color="#FFD700" />
+      <stop offset="70%" stop-color="#FFA000" />
+      <stop offset="100%" stop-color="#B26A00" />
     </linearGradient>
+    <linearGradient id="snowStageGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#B3E5FC" />
+    </linearGradient>
+    <linearGradient id="orbitArrowCyanGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#80D8FF" />
+      <stop offset="50%" stop-color="#29B6F6" />
+      <stop offset="100%" stop-color="#0277BD" />
+    </linearGradient>
+    <radialGradient id="viviWoodHeadGrad" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#FAD7A0" />
+      <stop offset="55%" stop-color="#E3A17B" />
+      <stop offset="100%" stop-color="#A05A36" />
+    </radialGradient>
   </defs>
+
+  <!-- CALQUE 1 : Ombre portée et extrusion 3D -->
   <g id="base-shadow">
-    <ellipse cx="256" cy="454" rx="168" ry="28" fill="#2B1105" opacity="0.30" />
+    <ellipse cx="256" cy="466" rx="188" ry="28" fill="#2B1105" opacity="0.34" />
   </g>
-  <g id="main-body" stroke="#2B1105" stroke-width="16" stroke-linejoin="round" stroke-linecap="round">
-    <ellipse cx="256" cy="364" rx="154" ry="52" fill="url(#pedestalWoodGrad)" />
-    <ellipse cx="256" cy="336" rx="154" ry="48" fill="url(#orbitGoldGrad)" />
-    <circle cx="256" cy="206" r="88" fill="#E3A17B" />
-    <path d="M74 282 A192 68 0 0 0 438 282" fill="none" stroke="#29B6F6" stroke-width="18" />
+
+  <!-- CALQUE 2 & 3 : Piédestal Rotatif Or & Bois, Figurine Vivienne & Flèches Orbitales 360° -->
+  <g id="main-body" stroke="#2B1105" stroke-width="14" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Anneau orbital arrière (perspective elliptique) -->
+    <path d="M56 338 A204 68 0 0 1 456 338" fill="none" stroke="#0277BD" stroke-width="14" stroke-dasharray="22 16" />
+
+    <!-- Socle inférieur en Or 24K -->
+    <path d="M88 378 L88 412 A168 52 0 0 0 424 412 L424 378 Z" fill="url(#orbitGoldGrad)" />
+    <ellipse cx="256" cy="378" rx="168" ry="50" fill="url(#orbitGoldGrad)" />
+
+    <!-- Fût cylindrique en Bois de Poivier & Érable avec rainures -->
+    <path d="M112 316 L112 374 A144 44 0 0 0 400 374 L400 316 Z" fill="url(#pedestalWoodGrad)" />
+    <line x1="168" y1="332" x2="168" y2="408" stroke="#6E472B" stroke-width="6" />
+    <line x1="226" y1="342" x2="226" y2="416" stroke="#6E472B" stroke-width="6" />
+    <line x1="286" y1="342" x2="286" y2="416" stroke="#6E472B" stroke-width="6" />
+    <line x1="344" y1="332" x2="344" y2="408" stroke="#6E472B" stroke-width="6" />
+
+    <!-- Plateau tournant supérieur en Or 24K -->
+    <ellipse cx="256" cy="316" rx="152" ry="46" fill="url(#orbitGoldGrad)" />
+    <!-- Disque d'exposition enneigé -->
+    <ellipse cx="256" cy="310" rx="116" ry="34" fill="url(#snowStageGrad)" stroke-width="10" />
+
+    <!-- Effigie / Buste Cartoon de Vivienne sur le piédestal -->
+    <!-- Pétales de la corolle Monogram autour de la tête -->
+    <g transform="translate(256, 178)">
+      <!-- Pétale Supérieur -->
+      <path d="M0 -128 Q42 -88 22 -52 L-22 -52 Q-42 -88 0 -128 Z" fill="url(#orbitGoldGrad)" stroke-width="12" />
+      <!-- Pétale Gauche -->
+      <path d="M-128 0 Q-88 -42 -52 -22 L-52 22 Q-88 42 -128 0 Z" fill="url(#orbitGoldGrad)" stroke-width="12" />
+      <!-- Pétale Droite -->
+      <path d="M128 0 Q88 -42 52 -22 L52 22 Q88 42 128 0 Z" fill="url(#orbitGoldGrad)" stroke-width="12" />
+      <!-- Corps / Épaules doudoune sur le socle -->
+      <path d="M-56 64 Q-64 128 0 132 Q64 128 56 64 Z" fill="#29B6F6" stroke-width="13" />
+      <!-- Col fourrure neige -->
+      <ellipse cx="0" cy="68" rx="54" ry="18" fill="#FFFFFF" stroke-width="11" />
+      <!-- Sphère Tête en bois verni -->
+      <circle cx="0" cy="0" r="76" fill="url(#viviWoodHeadGrad)" stroke-width="14" />
+      <!-- Masque de ski doré & azur relevé sur le front -->
+      <rect x="-58" y="-56" width="116" height="42" rx="20" fill="#FFD700" stroke-width="11" />
+      <rect x="-46" y="-48" width="92" height="26" rx="12" fill="url(#orbitArrowCyanGrad)" stroke-width="8" />
+      <!-- Œil fleur Monogram & Œil rond -->
+      <polygon points="-26,4 -20,16 -8,22 -20,28 -26,40 -32,28 -44,22 -32,16" fill="#FFD700" stroke-width="7" />
+      <circle cx="26" cy="22" r="12" fill="#2B1105" stroke="none" />
+      <circle cx="22" cy="18" r="4" fill="#FFFFFF" stroke="none" />
+      <!-- Sourire joyeux -->
+      <path d="M-14 42 Q0 54 14 42" fill="none" stroke="#2B1105" stroke-width="8" />
+    </g>
+
+    <!-- Flèches Orbitales 360° au premier plan -->
+    <!-- Flèche Gauche -> Centre -->
+    <path d="M44 338 C44 416, 152 456, 228 458 L228 480 L274 446 L228 414 L228 434 C166 432, 78 398, 78 338 Z" fill="url(#orbitArrowCyanGrad)" stroke-width="12" />
+    <!-- Flèche Droite -> Haut -->
+    <path d="M468 338 C468 398, 396 438, 316 450 L322 426 C382 416, 434 384, 434 338 L408 338 L452 292 L494 338 Z" fill="url(#orbitGoldGrad)" stroke-width="12" />
   </g>
+
+  <!-- CALQUE 4 : Reflets spéculaires blancs nets (Hard-Edged) -->
   <g id="specular-highlights">
-    <ellipse cx="222" cy="176" rx="28" ry="16" fill="#FFFFFF" opacity="0.68" />
+    <ellipse cx="224" cy="154" rx="22" ry="12" transform="rotate(-24 224 154)" fill="#FFFFFF" opacity="0.75" />
+    <rect x="220" y="134" width="38" height="10" rx="5" fill="#FFFFFF" opacity="0.88" />
+    <path d="M128 308 A128 36 0 0 1 256 280 L256 292 A112 30 0 0 0 144 314 Z" fill="#FFFFFF" opacity="0.82" />
+    <path d="M96 402 Q156 438 222 442 L222 450 Q150 446 90 412 Z" fill="#FFFFFF" opacity="0.78" />
   </g>
 </svg>

@@ -2,27 +2,113 @@
   <defs>
     <linearGradient id="greenShieldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" stop-color="#69F0AE" />
-      <stop offset="55%" stop-color="#00E676" />
-      <stop offset="100%" stop-color="#00A152" />
+      <stop offset="50%" stop-color="#00E676" />
+      <stop offset="100%" stop-color="#008E46" />
     </linearGradient>
-    <radialGradient id="sunGlowGrad" cx="50%" cy="40%" r="50%">
+    <linearGradient id="greenInnerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#B9F6CA" />
+      <stop offset="45%" stop-color="#00E676" />
+      <stop offset="100%" stop-color="#006935" />
+    </linearGradient>
+    <linearGradient id="pineFoliageGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#43A047" />
+      <stop offset="55%" stop-color="#2E7D32" />
+      <stop offset="100%" stop-color="#1B5E20" />
+    </linearGradient>
+    <linearGradient id="emeraldRibbonGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00C853" />
+      <stop offset="50%" stop-color="#69F0AE" />
+      <stop offset="100%" stop-color="#00964B" />
+    </linearGradient>
+    <radialGradient id="sunGlowGrad" cx="45%" cy="40%" r="55%">
       <stop offset="0%" stop-color="#FFFDE7" />
-      <stop offset="70%" stop-color="#FFD700" />
-      <stop offset="100%" stop-color="#FFA000" />
+      <stop offset="60%" stop-color="#FFD700" />
+      <stop offset="100%" stop-color="#FF8F00" />
     </radialGradient>
+    <linearGradient id="blossomPetalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="60%" stop-color="#FFF9C4" />
+      <stop offset="100%" stop-color="#FFD700" />
+    </linearGradient>
+    <linearGradient id="snowSlopeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#B3E5FC" />
+    </linearGradient>
   </defs>
+
+  <!-- CALQUE 1 : Ombre portée et extrusion 3D -->
   <g id="base-shadow">
-    <ellipse cx="256" cy="462" rx="148" ry="26" fill="#2B1105" opacity="0.28" />
-    <path d="M96 108 L256 54 L416 108 L392 332 Q256 446 256 446 Q256 446 120 332 Z" fill="#006935" transform="translate(0, 14)" />
+    <ellipse cx="256" cy="476" rx="164" ry="24" fill="#2B1105" opacity="0.30" />
+    <path d="M88 104 L256 46 L424 104 L398 332 Q340 412 256 452 Q172 412 114 332 Z" fill="#2B1105" transform="translate(0, 16)" opacity="0.45" />
+    <path d="M68 386 Q256 436 444 386 L428 442 Q256 488 84 442 Z" fill="#2B1105" transform="translate(0, 10)" opacity="0.35" />
   </g>
-  <g id="main-body" stroke="#2B1105" stroke-width="16" stroke-linejoin="round" stroke-linecap="round">
-    <path d="M96 108 L256 54 L416 108 L392 332 Q256 446 256 446 Q256 446 120 332 Z" fill="url(#greenShieldGrad)" />
-    <circle cx="332" cy="152" r="38" fill="url(#sunGlowGrad)" />
-    <path d="M236 146 L156 266 L196 266 L142 350 L330 350 L276 266 L316 266 Z" fill="#1B5E20" />
-    <path d="M236 146 L186 222 Q236 242 286 222 Z" fill="#FFFFFF" />
+
+  <!-- CALQUE 2 & 3 : Corps principal, sous-ensembles et micro-détails -->
+  <g id="main-body" stroke="#2B1105" stroke-width="14" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Bouclier héraldique externe -->
+    <path d="M88 104 L256 46 L424 104 L398 332 Q340 412 256 452 Q172 412 114 332 Z" fill="url(#greenShieldGrad)" />
+    <!-- Biseau interne du bouclier -->
+    <path d="M114 122 L256 72 L398 122 L376 318 Q326 388 256 422 Q186 388 136 318 Z" fill="url(#greenInnerGrad)" stroke-width="8" />
+
+    <!-- Pente enneigée interne au bas de l'écusson -->
+    <path d="M132 298 Q210 272 282 296 Q336 314 380 292 L376 318 Q326 388 256 422 Q186 388 136 318 Z" fill="url(#snowSlopeGrad)" stroke-width="10" />
+
+    <!-- Soleil doré rayonnant (Haut-Droite) -->
+    <g stroke-width="8">
+      <line x1="344" y1="92" x2="344" y2="76" stroke="#FFD700" />
+      <line x1="392" y1="112" x2="406" y2="100" stroke="#FFD700" />
+      <line x1="406" y1="156" x2="422" y2="156" stroke="#FFD700" />
+      <line x1="390" y1="198" x2="404" y2="210" stroke="#FFD700" />
+      <circle cx="344" cy="154" r="42" fill="url(#sunGlowGrad)" stroke="#2B1105" stroke-width="12" />
+    </g>
+
+    <!-- Tronc du sapin -->
+    <rect x="228" y="318" width="44" height="58" rx="8" fill="#8D5B3C" stroke-width="12" />
+    <line x1="244" y1="330" x2="244" y2="364" stroke="#5D4037" stroke-width="6" />
+
+    <!-- Sapin enneigé souriant (3 étages) -->
+    <!-- Étage inférieur -->
+    <path d="M250 214 L138 336 Q250 354 362 336 Z" fill="url(#pineFoliageGrad)" stroke-width="13" />
+    <!-- Étage intermédiaire -->
+    <path d="M250 154 L156 266 Q250 282 344 266 Z" fill="url(#pineFoliageGrad)" stroke-width="13" />
+    <!-- Étage supérieur -->
+    <path d="M250 98 L178 198 Q250 212 322 198 Z" fill="url(#pineFoliageGrad)" stroke-width="13" />
+
+    <!-- Coiffes de neige festonnées sur le sapin -->
+    <path d="M250 98 L194 174 Q214 188 232 174 Q250 190 268 174 Q286 188 306 174 Z" fill="#FFFFFF" stroke-width="10" />
+    <path d="M188 222 L166 254 Q194 268 218 252 Q240 244 188 222 Z" fill="#FFFFFF" stroke-width="9" />
+    <path d="M312 222 L334 254 Q306 268 282 252 Q260 244 312 222 Z" fill="#FFFFFF" stroke-width="9" />
+
+    <!-- Visage cartoon souriant du sapin -->
+    <ellipse cx="214" cy="296" rx="12" ry="8" fill="#FF8A80" stroke="none" />
+    <ellipse cx="286" cy="296" rx="12" ry="8" fill="#FF8A80" stroke="none" />
+    <path d="M216 280 Q224 268 232 280" fill="none" stroke="#2B1105" stroke-width="8" />
+    <path d="M268 280 Q276 268 284 280" fill="none" stroke="#2B1105" stroke-width="8" />
+    <path d="M232 296 Q250 316 268 296" fill="none" stroke="#2B1105" stroke-width="9" />
+
+    <!-- Fleur Monogram Blossom (Gauche) -->
+    <g transform="translate(148, 178)">
+      <path d="M0 -42 Q18 -18 0 0 Q-18 -18 0 -42 Z" fill="url(#blossomPetalGrad)" stroke-width="10" />
+      <path d="M42 0 Q18 18 0 0 Q18 -18 42 0 Z" fill="url(#blossomPetalGrad)" stroke-width="10" />
+      <path d="M0 42 Q-18 18 0 0 Q18 18 0 42 Z" fill="url(#blossomPetalGrad)" stroke-width="10" />
+      <path d="M-42 0 Q-18 -18 0 0 Q-18 18 -42 0 Z" fill="url(#blossomPetalGrad)" stroke-width="10" />
+      <circle cx="0" cy="0" r="12" fill="#FF4081" stroke-width="8" />
+    </g>
+
+    <!-- Ruban Émeraude #00E676 inférieur -->
+    <path d="M54 398 L104 374 L112 426 L68 446 L82 416 Z" fill="#00964B" stroke-width="12" />
+    <path d="M458 398 L408 374 L400 426 L444 446 L430 416 Z" fill="#00964B" stroke-width="12" />
+    <path d="M84 368 Q256 420 428 368 L414 426 Q256 476 98 426 Z" fill="url(#emeraldRibbonGrad)" stroke-width="14" />
+    <path d="M116 396 Q256 438 396 396" fill="none" stroke="#FFF9C4" stroke-width="6" stroke-dasharray="18 14" />
   </g>
+
+  <!-- CALQUE 4 : Reflets spéculaires blancs nets (Hard-Edged) -->
   <g id="specular-highlights">
-    <path d="M126 126 L252 84 L244 106 L134 146 Z" fill="#FFFFFF" opacity="0.65" />
-    <circle cx="320" cy="138" r="10" fill="#FFFFFF" opacity="0.85" />
+    <path d="M112 114 L248 66 L242 86 L124 128 L112 228 L98 218 Z" fill="#FFFFFF" opacity="0.78" />
+    <circle cx="330" cy="138" r="12" fill="#FFFFFF" opacity="0.92" />
+    <circle cx="348" cy="128" r="5" fill="#FFFFFF" opacity="0.85" />
+    <path d="M246 112 L212 162 L226 164 L250 124 Z" fill="#FFFFFF" opacity="0.90" />
+    <path d="M104 380 Q180 402 252 406 L248 418 Q174 412 108 392 Z" fill="#FFFFFF" opacity="0.72" />
+    <circle cx="144" cy="174" r="5" fill="#FFFFFF" opacity="0.95" />
   </g>
 </svg>

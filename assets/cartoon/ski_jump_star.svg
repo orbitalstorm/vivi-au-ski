@@ -1,25 +1,95 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="jumpStarGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+    <linearGradient id="jumpStarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#FFFDE7" />
-      <stop offset="55%" stop-color="#FFD700" />
-      <stop offset="100%" stop-color="#FF8F00" />
+      <stop offset="45%" stop-color="#FFD700" />
+      <stop offset="100%" stop-color="#FF6F00" />
     </linearGradient>
-    <linearGradient id="trailArcGrad" x1="0%" y1="100%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#29B6F6" />
-      <stop offset="50%" stop-color="#FF4081" />
+    <linearGradient id="starFacetDarkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFC107" />
+      <stop offset="100%" stop-color="#E65100" />
+    </linearGradient>
+    <linearGradient id="rainbowGoldBand1" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00E5FF" />
+      <stop offset="50%" stop-color="#00E676" />
       <stop offset="100%" stop-color="#FFD700" />
     </linearGradient>
+    <linearGradient id="rainbowGoldBand2" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FF4081" />
+      <stop offset="50%" stop-color="#FF9100" />
+      <stop offset="100%" stop-color="#FFF59D" />
+    </linearGradient>
+    <linearGradient id="rainbowGoldBand3" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7C4DFF" />
+      <stop offset="50%" stop-color="#29B6F6" />
+      <stop offset="100%" stop-color="#80D8FF" />
+    </linearGradient>
+    <linearGradient id="snowRampGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#81D4FA" />
+    </linearGradient>
   </defs>
+
+  <!-- CALQUE 1 : Ombre portée et extrusion 3D -->
   <g id="base-shadow">
-    <ellipse cx="256" cy="462" rx="136" ry="22" fill="#2B1105" opacity="0.26" />
+    <ellipse cx="256" cy="472" rx="158" ry="22" fill="#2B1105" opacity="0.28" />
+    <path d="M58 416 Q132 252 292 198 L322 282 Q186 328 118 442 Z" fill="#2B1105" transform="translate(0, 14)" opacity="0.34" />
+    <polygon points="312,48 358,148 468,162 386,238 408,346 312,292 216,346 238,238 156,162 266,148" fill="#2B1105" transform="translate(6, 14)" opacity="0.40" />
   </g>
-  <g id="main-body" stroke="#2B1105" stroke-width="16" stroke-linejoin="round" stroke-linecap="round">
-    <path d="M84 402 Q156 266 268 232 L292 288 Q192 322 132 426 Z" fill="url(#trailArcGrad)" />
-    <polygon points="286,74 328,168 430,180 354,248 374,348 286,298 198,348 218,248 142,180 244,168" fill="url(#jumpStarGrad)" />
+
+  <!-- CALQUE 2 & 3 : Traînée d'Arc-en-Ciel Doré, Tremplin, Étoile Big Air & Flocons -->
+  <g id="main-body" stroke="#2B1105" stroke-width="14" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Traînée d'arc-en-ciel doré à 3 rubans dynamiques -->
+    <path d="M48 394 Q124 224 286 168 L302 204 Q158 256 88 416 Z" fill="url(#rainbowGoldBand2)" stroke-width="12" />
+    <path d="M88 416 Q158 256 302 204 L318 242 Q188 288 124 434 Z" fill="url(#rainbowGoldBand1)" stroke-width="12" />
+    <path d="M124 434 Q188 288 318 242 L334 278 Q216 322 158 448 Z" fill="url(#rainbowGoldBand3)" stroke-width="12" />
+
+    <!-- Tremplin de saut enneigé (Kicker) en bas à gauche -->
+    <path d="M36 446 Q116 426 178 368 L196 446 Z" fill="url(#snowRampGrad)" stroke-width="12" />
+    <circle cx="196" cy="396" r="18" fill="#FFFFFF" stroke-width="9" />
+    <circle cx="222" cy="414" r="14" fill="#E1F5FE" stroke-width="8" />
+
+    <!-- Étoile Aérienne Big Air Trick (5 branches biseautées) -->
+    <polygon points="312,48 358,148 468,162 386,238 408,346 312,292 216,346 238,238 156,162 266,148" fill="url(#jumpStarGrad)" stroke-width="15" />
+
+    <!-- Facettes d'ombrage 3D internes de l'étoile -->
+    <polygon points="312,208 358,148 468,162 386,238" fill="url(#starFacetDarkGrad)" stroke="none" />
+    <polygon points="312,208 386,238 408,346 312,292" fill="url(#starFacetDarkGrad)" stroke="none" />
+    <polygon points="312,208 216,346 238,238" fill="url(#starFacetDarkGrad)" stroke="none" />
+    <!-- Arêtes de biseau internes -->
+    <line x1="312" y1="48" x2="312" y2="292" stroke="#2B1105" stroke-width="6" />
+    <line x1="156" y1="162" x2="386" y2="238" stroke="#2B1105" stroke-width="6" />
+    <line x1="468" y1="162" x2="238" y2="238" stroke="#2B1105" stroke-width="6" />
+    <line x1="216" y1="346" x2="358" y2="148" stroke="#2B1105" stroke-width="6" />
+    <line x1="408" y1="346" x2="266" y2="148" stroke="#2B1105" stroke-width="6" />
+
+    <!-- Cœur d'étoile Monogram incandescent au centre -->
+    <polygon points="312,152 328,192 368,208 328,224 312,264 296,224 256,208 296,192" fill="#FFFDE7" stroke-width="9" />
+    <circle cx="312" cy="208" r="12" fill="#FF4081" stroke-width="7" />
+
+    <!-- Flocons de neige géométriques (Cristaux alpins) -->
+    <!-- Flocon Haut-Gauche -->
+    <g transform="translate(116, 114)" stroke="#2B1105" stroke-width="10">
+      <polygon points="0,-38 10,-10 38,0 10,10 0,38 -10,10 -38,0 -10,-10" fill="#E1F5FE" />
+      <circle cx="0" cy="0" r="8" fill="#FFFFFF" stroke-width="6" />
+    </g>
+    <!-- Flocon Bas-Droite -->
+    <g transform="translate(432, 396)" stroke="#2B1105" stroke-width="9">
+      <polygon points="0,-32 8,-8 32,0 8,8 0,32 -8,8 -32,0 -8,-8" fill="#80D8FF" />
+      <circle cx="0" cy="0" r="6" fill="#FFFFFF" stroke-width="5" />
+    </g>
+    <!-- Flocon Haut-Droite -->
+    <g transform="translate(446, 86)" stroke="#2B1105" stroke-width="8">
+      <polygon points="0,-24 6,-6 24,0 6,6 0,24 -6,6 -24,0 -6,-6" fill="#FFF9C4" />
+    </g>
   </g>
+
+  <!-- CALQUE 4 : Reflets spéculaires blancs nets (Hard-Edged) -->
   <g id="specular-highlights">
-    <polygon points="286,98 308,154 258,158" fill="#FFFFFF" opacity="0.82" />
-    <circle cx="136" cy="142" r="14" fill="#FFFFFF" />
+    <polygon points="312,72 342,140 312,186 286,142" fill="#FFFFFF" opacity="0.88" />
+    <polygon points="184,168 258,158 246,184" fill="#FFFFFF" opacity="0.85" />
+    <path d="M74 374 Q138 244 268 188 L274 202 Q152 254 88 386 Z" fill="#FFFFFF" opacity="0.78" />
+    <circle cx="308" cy="204" r="4" fill="#FFFFFF" />
+    <circle cx="116" cy="114" r="4" fill="#FFFFFF" />
   </g>
 </svg>

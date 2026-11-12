@@ -1,27 +1,85 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
     <linearGradient id="trophyGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FFF9C4" />
-      <stop offset="45%" stop-color="#FFD700" />
-      <stop offset="100%" stop-color="#C77800" />
+      <stop offset="0%" stop-color="#FFFDE7" />
+      <stop offset="40%" stop-color="#FFD700" />
+      <stop offset="80%" stop-color="#F57F17" />
+      <stop offset="100%" stop-color="#C66900" />
     </linearGradient>
-    <radialGradient id="crystalBlueGrad" cx="50%" cy="50%" r="50%">
+    <linearGradient id="trophyDarkGoldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FFB300" />
+      <stop offset="50%" stop-color="#FFD700" />
+      <stop offset="100%" stop-color="#B26A00" />
+    </linearGradient>
+    <radialGradient id="crystalBlueGrad" cx="40%" cy="40%" r="60%">
       <stop offset="0%" stop-color="#FFFFFF" />
-      <stop offset="100%" stop-color="#29B6F6" />
+      <stop offset="55%" stop-color="#80D8FF" />
+      <stop offset="100%" stop-color="#0288D1" />
     </radialGradient>
+    <linearGradient id="mahoganyBaseGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#B71C1C" />
+      <stop offset="45%" stop-color="#8B1E24" />
+      <stop offset="100%" stop-color="#4A0E12" />
+    </linearGradient>
   </defs>
+
+  <!-- CALQUE 1 : Ombre portée et extrusion 3D -->
   <g id="base-shadow">
-    <ellipse cx="256" cy="462" rx="142" ry="24" fill="#2B1105" opacity="0.30" />
+    <ellipse cx="256" cy="472" rx="158" ry="24" fill="#2B1105" opacity="0.32" />
+    <rect x="136" y="424" width="240" height="40" rx="16" fill="#2B1105" opacity="0.38" />
   </g>
-  <g id="main-body" stroke="#2B1105" stroke-width="16" stroke-linejoin="round" stroke-linecap="round">
-    <path d="M142 132 Q72 132 82 214 Q92 276 168 278" fill="none" />
-    <path d="M370 132 Q440 132 430 214 Q420 276 344 278" fill="none" />
-    <path d="M140 96 L372 96 L346 266 Q328 338 256 338 Q184 338 166 266 Z" fill="url(#trophyGoldGrad)" />
-    <rect x="230" y="334" width="52" height="66" rx="10" fill="url(#trophyGoldGrad)" />
-    <rect x="164" y="396" width="184" height="48" rx="16" fill="#8B1E24" />
-    <polygon points="256,144 276,192 324,212 276,232 256,280 236,232 188,212 236,192" fill="url(#crystalBlueGrad)" />
+
+  <!-- CALQUE 2 & 3 : Coupe d'Or, Cristaux de Neige, Étoile Monogram et Socle Royal -->
+  <g id="main-body" stroke="#2B1105" stroke-width="14" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Cristaux de neige glacés sertis en couronne au sommet de la coupe -->
+    <polygon points="184,96 206,44 232,96" fill="url(#crystalBlueGrad)" stroke-width="12" />
+    <polygon points="280,96 306,44 328,96" fill="url(#crystalBlueGrad)" stroke-width="12" />
+    <polygon points="222,98 256,28 290,98" fill="url(#crystalBlueGrad)" stroke-width="13" />
+
+    <!-- Anses royales à volutes (Gauche & Droite) -->
+    <path d="M144 126 C64 112, 46 218, 108 264 C138 286, 166 284, 178 272 L170 242 C146 250, 118 242, 106 216 C92 184, 108 150, 148 156 Z" fill="url(#trophyDarkGoldGrad)" />
+    <path d="M368 126 C448 112, 466 218, 404 264 C374 286, 346 284, 334 272 L342 242 C366 250, 394 242, 406 216 C420 184, 404 150, 364 156 Z" fill="url(#trophyDarkGoldGrad)" />
+
+    <!-- Cristaux de glace latéraux sertis sur les anses -->
+    <polygon points="72,188 42,174 66,152 84,170" fill="url(#crystalBlueGrad)" stroke-width="10" />
+    <polygon points="440,188 470,174 446,152 428,170" fill="url(#crystalBlueGrad)" stroke-width="10" />
+
+    <!-- Pied et Nœud tourné du calice -->
+    <path d="M222 324 L290 324 L306 392 L206 392 Z" fill="url(#trophyDarkGoldGrad)" />
+    <ellipse cx="256" cy="354" rx="48" ry="16" fill="url(#trophyGoldGrad)" stroke-width="12" />
+
+    <!-- Calice / Vasque d'Or 24K -->
+    <path d="M132 96 L380 96 L354 254 C338 318, 298 334, 256 334 C214 334, 174 318, 158 254 Z" fill="url(#trophyGoldGrad)" />
+
+    <!-- Lèvre supérieure moulurée de la coupe -->
+    <rect x="122" y="78" width="268" height="28" rx="14" fill="url(#trophyGoldGrad)" />
+
+    <!-- Cannelures et gravures internes de la vasque -->
+    <path d="M174 114 Q188 268 232 318" fill="none" stroke="#C66900" stroke-width="6" />
+    <path d="M338 114 Q324 268 280 318" fill="none" stroke="#C66900" stroke-width="6" />
+
+    <!-- Médaillon Étoile Monogram serti de cristaux au centre de la coupe -->
+    <circle cx="256" cy="204" r="64" fill="url(#trophyDarkGoldGrad)" stroke-width="10" />
+    <!-- Étoile Monogram à 4 branches + 4 pointes de glace -->
+    <polygon points="256,148 272,188 296,164 272,196 312,204 272,212 296,244 272,220 256,260 240,220 216,244 240,212 200,204 240,196 216,164 240,188" fill="url(#crystalBlueGrad)" stroke-width="8" />
+    <polygon points="256,130 274,186 330,204 274,222 256,278 238,222 182,204 238,186" fill="url(#crystalBlueGrad)" stroke-width="11" />
+    <circle cx="256" cy="204" r="14" fill="#FFF9C4" stroke-width="8" />
+
+    <!-- Socle Royal Acajou / Bordeaux à 2 étages -->
+    <rect x="162" y="388" width="188" height="32" rx="10" fill="url(#mahoganyBaseGrad)" />
+    <rect x="136" y="416" width="240" height="44" rx="14" fill="url(#mahoganyBaseGrad)" />
+
+    <!-- Plaque d'Or gravée sur le socle -->
+    <rect x="192" y="426" width="128" height="24" rx="6" fill="url(#trophyGoldGrad)" stroke-width="8" />
   </g>
+
+  <!-- CALQUE 4 : Reflets spéculaires blancs nets (Hard-Edged) -->
   <g id="specular-highlights">
-    <path d="M166 118 L202 118 L190 256 L174 246 Z" fill="#FFFFFF" opacity="0.72" />
+    <rect x="142" y="84" width="96" height="10" rx="5" fill="#FFFFFF" opacity="0.88" />
+    <path d="M154 118 L184 118 L176 244 Q180 278 202 298 L184 294 Q164 272 158 238 Z" fill="#FFFFFF" opacity="0.78" />
+    <path d="M256 40 L242 84 L254 84 Z" fill="#FFFFFF" opacity="0.92" />
+    <path d="M256 144 L246 188 L256 192 Z" fill="#FFFFFF" opacity="0.95" />
+    <rect x="154" y="424" width="28" height="10" rx="5" fill="#FFFFFF" opacity="0.55" />
+    <circle cx="252" cy="200" r="5" fill="#FFFFFF" />
   </g>
 </svg>

@@ -2,17 +2,54 @@
   <defs>
     <linearGradient id="playTriangleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#FFFDE7" />
-      <stop offset="50%" stop-color="#FFD700" />
-      <stop offset="100%" stop-color="#FF8F00" />
+      <stop offset="45%" stop-color="#FFD700" />
+      <stop offset="100%" stop-color="#FF6F00" />
+    </linearGradient>
+    <linearGradient id="playInnerBevelGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FFA000" />
+      <stop offset="55%" stop-color="#FFD700" />
+      <stop offset="100%" stop-color="#FFF9C4" />
+    </linearGradient>
+    <linearGradient id="iceSpeedGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="60%" stop-color="#80D8FF" />
+      <stop offset="100%" stop-color="#29B6F6" />
     </linearGradient>
   </defs>
+
+  <!-- CALQUE 1 : Ombre portée et extrusion 3D -->
   <g id="base-shadow">
-    <ellipse cx="256" cy="458" rx="136" ry="24" fill="#2B1105" opacity="0.28" />
+    <ellipse cx="256" cy="468" rx="156" ry="24" fill="#2B1105" opacity="0.30" />
+    <path d="M138 84 Q138 56 164 70 L432 230 Q462 248 432 266 L164 426 Q138 440 138 412 Z" fill="#2B1105" transform="translate(8, 18)" opacity="0.42" />
   </g>
-  <g id="main-body" stroke="#2B1105" stroke-width="18" stroke-linejoin="round" stroke-linecap="round">
-    <path d="M148 96 L416 256 L148 416 Q124 256 148 96 Z" fill="url(#playTriangleGrad)" />
+
+  <!-- CALQUE 2 & 3 : Triangle Play Glisse Dynamique, Sillages de Neige & Crête Glacée -->
+  <g id="main-body" stroke="#2B1105" stroke-width="15" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Sillages de vitesse / Carving glacé à gauche -->
+    <rect x="38" y="168" width="96" height="24" rx="12" fill="url(#iceSpeedGrad)" stroke-width="12" />
+    <rect x="22" y="236" width="112" height="28" rx="14" fill="url(#iceSpeedGrad)" stroke-width="12" />
+    <rect x="46" y="308" width="88" height="24" rx="12" fill="url(#iceSpeedGrad)" stroke-width="12" />
+
+    <!-- Corps principal du Triangle Play Or 24K -->
+    <path d="M138 84 Q138 56 164 70 L432 230 Q462 248 432 266 L164 426 Q138 440 138 412 Z" fill="url(#playTriangleGrad)" />
+
+    <!-- Biseau interne sculpté avec pistes de ski stylisées -->
+    <path d="M174 128 L384 248 L174 368 Z" fill="url(#playInnerBevelGrad)" stroke-width="10" />
+    <path d="M174 296 Q248 264 338 274" fill="none" stroke="#FFFFFF" stroke-width="8" />
+    <path d="M174 332 Q238 304 294 300" fill="none" stroke="#80D8FF" stroke-width="7" />
+
+    <!-- Coiffe de neige fraîche drapée sur l'arête supérieure -->
+    <path d="M144 74 Q158 56 184 72 L338 164 Q314 186 288 168 Q264 186 242 158 Q216 174 196 142 Q166 156 144 126 Z" fill="#FFFFFF" stroke-width="12" />
+
+    <!-- Étoile Monogram d'impulsion à la pointe avant -->
+    <polygon points="418,162 426,184 448,192 426,200 418,222 410,200 388,192 410,184" fill="#FFF9C4" stroke-width="9" />
   </g>
+
+  <!-- CALQUE 4 : Reflets spéculaires blancs nets (Hard-Edged) -->
   <g id="specular-highlights">
-    <path d="M168 134 L356 246 L332 260 L166 162 Z" fill="#FFFFFF" opacity="0.75" />
+    <path d="M164 84 L298 164 L286 178 L160 104 Z" fill="#FFFFFF" opacity="0.92" />
+    <path d="M192 154 L348 244 L332 256 L192 176 Z" fill="#FFFFFF" opacity="0.78" />
+    <circle cx="388" cy="248" r="10" fill="#FFFFFF" opacity="0.90" />
+    <rect x="52" y="244" width="44" height="8" rx="4" fill="#FFFFFF" opacity="0.88" />
   </g>
 </svg>

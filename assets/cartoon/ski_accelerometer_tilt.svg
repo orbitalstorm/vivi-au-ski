@@ -1,25 +1,92 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="phoneBodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#4FC3F7" />
+    <linearGradient id="phoneChassisGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#546E7A" />
+      <stop offset="50%" stop-color="#37474F" />
+      <stop offset="100%" stop-color="#1C262B" />
+    </linearGradient>
+    <linearGradient id="phoneScreenGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#80D8FF" />
+      <stop offset="55%" stop-color="#29B6F6" />
       <stop offset="100%" stop-color="#0277BD" />
     </linearGradient>
-    <linearGradient id="tiltArrowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#FFD700" />
-      <stop offset="100%" stop-color="#FF9100" />
+    <linearGradient id="tiltLeftArrowGrad" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFF59D" />
+      <stop offset="50%" stop-color="#FFD700" />
+      <stop offset="100%" stop-color="#FF6D00" />
+    </linearGradient>
+    <linearGradient id="tiltRightArrowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#B9F6CA" />
+      <stop offset="50%" stop-color="#00E676" />
+      <stop offset="100%" stop-color="#008E46" />
     </linearGradient>
   </defs>
+
+  <!-- CALQUE 1 : Ombre portée et extrusion 3D -->
   <g id="base-shadow">
-    <ellipse cx="256" cy="458" rx="148" ry="24" fill="#2B1105" opacity="0.28" />
-  </g>
-  <g id="main-body" stroke="#2B1105" stroke-width="16" stroke-linejoin="round" stroke-linecap="round">
-    <path d="M74 226 Q146 116 256 106 L256 76 L312 122 L256 164 L256 138 Q166 146 106 244 Z" fill="url(#tiltArrowGrad)" />
-    <g transform="rotate(-16 256 278)">
-      <rect x="176" y="148" width="160" height="264" rx="32" fill="#37474F" />
-      <rect x="194" y="176" width="124" height="204" rx="16" fill="url(#phoneBodyGrad)" />
+    <ellipse cx="256" cy="472" rx="162" ry="24" fill="#2B1105" opacity="0.30" />
+    <g transform="translate(8, 16) rotate(-15 256 286)">
+      <rect x="158" y="132" width="196" height="304" rx="38" fill="#2B1105" opacity="0.38" />
     </g>
   </g>
+
+  <!-- CALQUE 2 & 3 : Flèches de Carving Gauche/Droite, Smartphone Incliné & Inclinomètre -->
+  <g id="main-body" stroke="#2B1105" stroke-width="14" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Arc de Carving GAUCHE (Or / Orange) -->
+    <path d="M236 68 Q112 72 62 178 L34 164 L54 242 L126 208 L98 194 Q138 112 236 108 Z" fill="url(#tiltLeftArrowGrad)" stroke-width="13" />
+
+    <!-- Arc de Carving DROITE (Émeraude / Vert Vif) -->
+    <path d="M276 68 Q400 72 450 178 L478 164 L458 242 L386 208 L414 194 Q374 112 276 108 Z" fill="url(#tiltRightArrowGrad)" stroke-width="13" />
+
+    <!-- Jauge d'angle centrale (Arc gradué au-dessus du téléphone) -->
+    <path d="M188 124 Q256 98 324 124" fill="none" stroke="#FFD700" stroke-width="8" stroke-dasharray="12 12" />
+    <polygon points="256,82 270,110 242,110" fill="#FF4081" stroke-width="8" />
+
+    <!-- Smartphone Cartoon Incliné (-15° : Simulation Gyroscope / Accéléromètre) -->
+    <g transform="rotate(-15 256 286)">
+      <!-- Boutons latéraux métalliques -->
+      <rect x="144" y="196" width="18" height="44" rx="6" fill="#FFD700" stroke-width="10" />
+      <rect x="144" y="252" width="18" height="44" rx="6" fill="#FFD700" stroke-width="10" />
+      <rect x="350" y="218" width="18" height="58" rx="6" fill="#FF4081" stroke-width="10" />
+
+      <!-- Châssis externe du téléphone -->
+      <rect x="158" y="132" width="196" height="304" rx="38" fill="url(#phoneChassisGrad)" stroke-width="15" />
+
+      <!-- Écran alpin lumineux -->
+      <rect x="178" y="164" width="156" height="236" rx="22" fill="url(#phoneScreenGrad)" stroke-width="11" />
+
+      <!-- Piste de ski 3D affichée dans l'écran -->
+      <path d="M226 218 L286 218 L334 398 L178 398 Z" fill="#E1F5FE" stroke-width="8" />
+      <line x1="256" y1="218" x2="256" y2="398" stroke="#80D8FF" stroke-width="5" stroke-dasharray="12 10" />
+
+      <!-- Niveau à bulle / Horizon artificiel Gyroscope sur l'écran -->
+      <g transform="rotate(15 256 282)">
+        <line x1="192" y1="282" x2="320" y2="282" stroke="#FFD700" stroke-width="8" />
+        <circle cx="256" cy="282" r="24" fill="#00E676" stroke-width="9" />
+        <polygon points="256,266 268,290 244,290" fill="#FFFFFF" stroke-width="6" />
+      </g>
+
+      <!-- Mini skis dorés en carving au bas de l'écran -->
+      <rect x="224" y="332" width="18" height="54" rx="9" fill="#FFD700" stroke-width="8" />
+      <rect x="270" y="332" width="18" height="54" rx="9" fill="#FFD700" stroke-width="8" />
+
+      <!-- Haut-parleur et capteur frontal -->
+      <line x1="232" y1="148" x2="280" y2="148" stroke="#2B1105" stroke-width="8" />
+      <circle cx="212" cy="148" r="5" fill="#29B6F6" stroke="none" />
+      <!-- Barre d'accueil tactile -->
+      <line x1="226" y1="418" x2="286" y2="418" stroke="#CFD8DC" stroke-width="7" />
+    </g>
+  </g>
+
+  <!-- CALQUE 4 : Reflets spéculaires blancs nets (Hard-Edged) -->
   <g id="specular-highlights">
-    <rect x="206" y="192" width="22" height="110" rx="11" transform="rotate(-16 256 278)" fill="#FFFFFF" opacity="0.65" />
+    <g transform="rotate(-15 256 286)">
+      <rect x="192" y="182" width="18" height="118" rx="9" fill="#FFFFFF" opacity="0.78" />
+      <circle cx="198" cy="322" r="8" fill="#FFFFFF" opacity="0.78" />
+      <path d="M174 148 Q210 138 258 140" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" opacity="0.65" />
+    </g>
+    <path d="M222 76 Q142 82 96 144 L110 152 Q150 96 222 90 Z" fill="#FFFFFF" opacity="0.85" />
+    <path d="M290 76 Q370 82 416 144 L402 152 Q362 96 290 90 Z" fill="#FFFFFF" opacity="0.85" />
+    <circle cx="250" cy="276" r="6" fill="#FFFFFF" opacity="0.95" />
   </g>
 </svg>

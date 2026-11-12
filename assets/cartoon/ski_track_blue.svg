@@ -5,22 +5,96 @@
       <stop offset="50%" stop-color="#29B6F6" />
       <stop offset="100%" stop-color="#0277BD" />
     </linearGradient>
+    <linearGradient id="iceBezelGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="45%" stop-color="#81D4FA" />
+      <stop offset="100%" stop-color="#01579B" />
+    </linearGradient>
     <linearGradient id="goldSkiGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FFF59D" />
-      <stop offset="100%" stop-color="#FFB300" />
+      <stop offset="0%" stop-color="#FFF9C4" />
+      <stop offset="50%" stop-color="#FFD700" />
+      <stop offset="100%" stop-color="#E65100" />
+    </linearGradient>
+    <linearGradient id="peakLitGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#E1F5FE" />
+    </linearGradient>
+    <linearGradient id="peakShadeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#B3E5FC" />
+      <stop offset="100%" stop-color="#0288D1" />
+    </linearGradient>
+    <linearGradient id="alpinePineGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#26A69A" />
+      <stop offset="100%" stop-color="#004D40" />
     </linearGradient>
   </defs>
+
+  <!-- CALQUE 1 : Ombre portée et extrusion 3D -->
   <g id="base-shadow">
-    <ellipse cx="256" cy="462" rx="150" ry="26" fill="#2B1105" opacity="0.28" />
-    <circle cx="256" cy="262" r="186" fill="#014F86" />
+    <ellipse cx="256" cy="472" rx="168" ry="24" fill="#2B1105" opacity="0.30" />
+    <circle cx="256" cy="264" r="192" fill="#2B1105" opacity="0.42" />
   </g>
-  <g id="main-body" stroke="#2B1105" stroke-width="16" stroke-linejoin="round" stroke-linecap="round">
-    <circle cx="256" cy="248" r="186" fill="url(#blueBadgeGrad)" />
-    <path d="M118 334 L212 164 L276 266 L326 192 L396 334 Z" fill="#E1F5FE" />
-    <rect x="132" y="238" width="248" height="28" rx="14" transform="rotate(-32 256 252)" fill="url(#goldSkiGrad)" />
-    <rect x="132" y="238" width="248" height="28" rx="14" transform="rotate(32 256 252)" fill="url(#goldSkiGrad)" />
+
+  <!-- CALQUE 2 & 3 : Corps principal, skis croisés, double sommet et sapins -->
+  <g id="main-body" stroke="#2B1105" stroke-width="14" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Skis croisés dorés (arrière-plan débordant de l'écusson) -->
+    <g transform="rotate(-38 256 248)">
+      <path d="M24 228 L462 228 Q496 228 502 248 Q496 268 462 268 L24 268 Z" fill="url(#goldSkiGrad)" />
+      <rect x="216" y="232" width="76" height="32" rx="8" fill="#37474F" stroke-width="10" />
+      <line x1="64" y1="248" x2="196" y2="248" stroke="#FFF9C4" stroke-width="6" />
+    </g>
+    <g transform="rotate(38 256 248)">
+      <path d="M10 228 L448 228 Q482 228 488 248 Q482 268 448 268 L10 268 Z" fill="url(#goldSkiGrad)" />
+      <rect x="216" y="232" width="76" height="32" rx="8" fill="#37474F" stroke-width="10" />
+      <line x1="64" y1="248" x2="196" y2="248" stroke="#FFF9C4" stroke-width="6" />
+    </g>
+
+    <!-- Médaillon circulaire Azur #29B6F6 avec lunette glacée -->
+    <circle cx="256" cy="248" r="186" fill="url(#iceBezelGrad)" />
+    <circle cx="256" cy="248" r="158" fill="url(#blueBadgeGrad)" stroke-width="12" />
+
+    <!-- Rivets techniques sur la lunette -->
+    <circle cx="256" cy="76" r="8" fill="#FFF9C4" stroke-width="6" />
+    <circle cx="256" cy="420" r="8" fill="#FFF9C4" stroke-width="6" />
+    <circle cx="84" cy="248" r="8" fill="#FFF9C4" stroke-width="6" />
+    <circle cx="428" cy="248" r="8" fill="#FFF9C4" stroke-width="6" />
+
+    <!-- Double sommet alpin (Forêt d'Asnières) avec facettes ombrées -->
+    <!-- Sommet Principal Gauche -->
+    <polygon points="108,342 206,122 206,342" fill="url(#peakLitGrad)" stroke-width="12" />
+    <polygon points="206,122 296,342 206,342" fill="url(#peakShadeGrad)" stroke-width="12" />
+    <!-- Sommet Secondaire Droite -->
+    <polygon points="236,342 328,154 328,342" fill="url(#peakLitGrad)" stroke-width="12" />
+    <polygon points="328,154 404,342 328,342" fill="url(#peakShadeGrad)" stroke-width="12" />
+
+    <!-- Crêtes de neige éternelle -->
+    <path d="M206 122 L166 212 L192 198 L206 218 L224 196 L246 210 Z" fill="#FFFFFF" stroke-width="8" />
+    <path d="M328 154 L294 226 L316 214 L328 232 L346 212 L362 224 Z" fill="#FFFFFF" stroke-width="8" />
+
+    <!-- Skis dorés croisés miniatures en blason central -->
+    <g transform="translate(256, 286)">
+      <rect x="-86" y="-11" width="172" height="22" rx="11" transform="rotate(-28)" fill="url(#goldSkiGrad)" stroke-width="10" />
+      <rect x="-86" y="-11" width="172" height="22" rx="11" transform="rotate(28)" fill="url(#goldSkiGrad)" stroke-width="10" />
+      <circle cx="0" cy="0" r="14" fill="#FFFFFF" stroke-width="8" />
+    </g>
+
+    <!-- Sapins alpins (Forêt d'Asnières) à la base -->
+    <path d="M138 242 L102 332 L126 332 L106 376 L170 376 L150 332 L174 332 Z" fill="url(#alpinePineGrad)" stroke-width="11" />
+    <path d="M138 242 L118 292 Q138 302 158 292 Z" fill="#FFFFFF" stroke-width="8" />
+
+    <path d="M374 248 L342 332 L362 332 L344 376 L404 376 L386 332 L406 332 Z" fill="url(#alpinePineGrad)" stroke-width="11" />
+    <path d="M374 248 L356 294 Q374 304 392 294 Z" fill="#FFFFFF" stroke-width="8" />
+
+    <!-- Socle de neige courbé au bas du médaillon -->
+    <path d="M118 352 Q256 322 394 352 Q352 406 256 406 Q160 406 118 352 Z" fill="url(#peakLitGrad)" stroke-width="12" />
   </g>
+
+  <!-- CALQUE 4 : Reflets spéculaires blancs nets (Hard-Edged) -->
   <g id="specular-highlights">
-    <path d="M128 164 A154 154 0 0 1 278 96 A140 140 0 0 0 148 182 Z" fill="#FFFFFF" opacity="0.65" />
+    <path d="M118 158 A168 168 0 0 1 268 82 L262 98 A150 150 0 0 0 134 168 Z" fill="#FFFFFF" opacity="0.85" />
+    <path d="M198 148 L156 242 L172 242 L202 168 Z" fill="#FFFFFF" opacity="0.92" />
+    <path d="M322 178 L292 244 L306 244 L326 196 Z" fill="#FFFFFF" opacity="0.90" />
+    <circle cx="144" cy="128" r="10" fill="#FFFFFF" opacity="0.88" />
+    <circle cx="382" cy="138" r="8" fill="#FFFFFF" opacity="0.85" />
   </g>
 </svg>
