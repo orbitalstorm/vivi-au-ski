@@ -16,6 +16,7 @@ Future<void> main() async {
   await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
     DeviceOrientation.portraitUp,
   ]);
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -44,7 +45,12 @@ void _triggerHaptic(SkiHapticEvent event) {
   }
 }
 
-/// Tactile 3D Cartoon Button implementing `mobile-game-ui` v1.2.0 (Mode B Flutter).
+/// Tactile 3D Cartoon Button implementing `mobile-game-ui` v1.2.0 (Mode B Flutter):
+/// - Immediate Squash & Stretch (`AnimatedScale` 0.92 on pointer down)
+/// - Physical 3D bottom lip (`lipDepth: 6.0`) that compresses to `0.0` on press
+/// - Crisp top specular highlight pill (`#FFFFFF`) & thick `#2B1105` outline
+/// - Guaranteed minimum 48x48dp touch target (`ConstrainedBox`)
+/// - Native iOS/Android haptic impact (`HapticFeedback.lightImpact`)
 class JuicySki3DButton extends StatefulWidget {
   const JuicySki3DButton({
     super.key,
@@ -98,13 +104,12 @@ class _JuicySki3DButtonState extends State<JuicySki3DButton> {
           minHeight: widget.minHeight,
         ),
         child: AnimatedScale(
-          scale: _pressed ? 0.93 : 1.0,
+          scale: _pressed ? 0.92 : 1.0,
           duration: Duration(milliseconds: _pressed ? 70 : 180),
           curve: _pressed ? Curves.easeOutCubic : Curves.elasticOut,
           child: Transform.translate(
             offset: Offset(0, dy),
             child: Container(
-              padding: widget.padding,
               decoration: BoxDecoration(
                 color: widget.backgroundColor,
                 borderRadius: BorderRadius.circular(widget.borderRadius),
@@ -117,13 +122,109 @@ class _JuicySki3DButtonState extends State<JuicySki3DButton> {
                   ),
                 ],
               ),
-              child: widget.child,
+              child: Stack(
+                alignment: Alignment.center,
+                children: <Widget>[
+                  // Crisp cartoon specular highlight along the top edge
+                  Positioned(
+                    top: 3,
+                    left: 12,
+                    right: 12,
+                    child: IgnorePointer(
+                      child: Container(
+                        height: 3.5,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: widget.padding,
+                    child: widget.child,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
+}
+
+/// Decorative Cartoon Snow-Capped Roof with dripping snow scallops and specular shine.
+class _CartoonSnowCapDecoration extends StatelessWidget {
+  const _CartoonSnowCapDecoration({
+    this.height = 16.0,
+  });
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: height,
+      child: CustomPaint(
+        painter: const _CartoonSnowCapPainter(),
+      ),
+    );
+  }
+}
+
+class _CartoonSnowCapPainter extends CustomPainter {
+  const _CartoonSnowCapPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double w = size.width;
+    final double h = size.height;
+    if (w <= 0 || h <= 0) return;
+
+    final Path snowPath = Path()
+      ..moveTo(2, h * 0.35)
+      ..quadraticBezierTo(w * 0.25, 0, w * 0.5, h * 0.12)
+      ..quadraticBezierTo(w * 0.75, 0, w - 2, h * 0.35)
+      ..lineTo(w - 2, h * 0.62)
+      ..quadraticBezierTo(w * 0.86, h * 1.0, w * 0.72, h * 0.58)
+      ..quadraticBezierTo(w * 0.58, h * 1.0, w * 0.44, h * 0.60)
+      ..quadraticBezierTo(w * 0.28, h * 1.0, w * 0.14, h * 0.58)
+      ..quadraticBezierTo(w * 0.05, h * 0.92, 2, h * 0.62)
+      ..close();
+
+    canvas.drawPath(
+      snowPath,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset.zero,
+          Offset(0, h),
+          const <Color>[Color(0xFFFFFFFF), Color(0xFFE1F5FE)],
+        ),
+    );
+
+    canvas.drawPath(
+      snowPath,
+      Paint()
+        ..color = const Color(0xFF2B1105)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0
+        ..strokeJoin = StrokeJoin.round,
+    );
+
+    // Specular white highlight
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(w * 0.20, h * 0.18, w * 0.60, h * 0.20),
+        const Radius.circular(3),
+      ),
+      Paint()..color = Colors.white.withValues(alpha: 0.9),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _CartoonSnowCapPainter oldDelegate) => false;
 }
 
 class ViviAuSkiApp extends StatelessWidget {
@@ -376,6 +477,19 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
     }
   }
 
+  Color _speedDynamicColor(double speedKmh, SkiTrackId track) {
+    final double ratio =
+        (speedKmh / track.maxSpeedKmh).clamp(0.0, 1.35);
+    if (ratio >= 0.96) {
+      return const Color(0xFFD50000); // High-velocity / Turbo Red-Crimson
+    } else if (ratio >= 0.78) {
+      return const Color(0xFFE65100); // Carving Amber-Orange
+    } else if (ratio >= 0.58) {
+      return const Color(0xFF008E46); // Crisp Alpine Emerald
+    }
+    return const Color(0xFF0277BD); // Glacier Azure
+  }
+
   @override
   Widget build(BuildContext context) {
     final Widget content = Focus(
@@ -443,13 +557,18 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
   // ---------------------------------------------------------------------------
 
   Widget _buildMainMenuOverlay() {
+    final VivienneSkiEdition activeEdition = _engine.selectedEdition;
+    final ui.Image? previewSprite = _turntableSprites.length > 12
+        ? (_turntableSprites[0] ?? _turntableSprites[12])
+        : null;
+
     return Container(
       key: const Key('main_menu_overlay'),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       child: Center(
         child: SingleChildScrollView(
           child: Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
             decoration: BoxDecoration(
               color: const Color(0xF5FFF8E7),
               borderRadius: BorderRadius.circular(28),
@@ -465,18 +584,34 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                // Header Banner
+                const _CartoonSnowCapDecoration(height: 13),
+                const SizedBox(height: 4),
+
+                // Header Banner with Specular Shine
                 Container(
                   width: double.infinity,
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: <Color>[Color(0xFF29B6F6), Color(0xFF0277BD)],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: <Color>[
+                        Color(0xFF4FC3F7),
+                        Color(0xFF0288D1),
+                        Color(0xFF01579B),
+                      ],
                     ),
                     borderRadius: BorderRadius.circular(20),
                     border:
                         Border.all(color: const Color(0xFF2B1105), width: 2.6),
+                    boxShadow: const <BoxShadow>[
+                      BoxShadow(
+                        color: Color(0xFF003c6c),
+                        blurRadius: 0,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: const Column(
                     children: <Widget>[
@@ -484,7 +619,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                         'VIVI AU SKI 3D',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 24,
+                          fontSize: 22,
                           fontWeight: FontWeight.w900,
                           color: Colors.white,
                           letterSpacing: 0.8,
@@ -495,7 +630,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                         'DESCENTE ROYALE • ACCÉLÉROMÈTRE & BOSSES 3D',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 10.5,
                           fontWeight: FontWeight.w800,
                           color: Color(0xFFFFF59D),
                         ),
@@ -503,63 +638,156 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                     ],
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
 
-                // 4 Vivienne Ski Editions Compact Selector
-                SizedBox(
-                  height: 38,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: VivienneSkiEdition.values.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 6),
-                    itemBuilder: (BuildContext context, int index) {
-                      final VivienneSkiEdition ed =
-                          VivienneSkiEdition.values[index];
-                      final bool selected = _engine.selectedEdition == ed;
-                      return GestureDetector(
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          _engine.selectEdition(ed);
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? const Color(0xFFFFD700)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: const Color(0xFF2B1105),
-                              width: selected ? 2.4 : 1.6,
+                // Live Preview of Vivienne in Ski Gear + 4 Vivienne Editions Selector
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: <Color>[Color(0xFFE1F5FE), Color(0xFFFFF9C4)],
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: const Color(0xFF2B1105),
+                      width: 2.2,
+                    ),
+                  ),
+                  child: Column(
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: const Color(0xFF2B1105),
+                                width: 2.2,
+                              ),
+                              boxShadow: <BoxShadow>[
+                                BoxShadow(
+                                  color: activeEdition.trimEdgeColor,
+                                  blurRadius: 0,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: ClipOval(
+                              child: previewSprite != null
+                                  ? RawImage(
+                                      image: previewSprite,
+                                      fit: BoxFit.contain,
+                                    )
+                                  : Center(
+                                      child: Container(
+                                        width: 24,
+                                        height: 24,
+                                        decoration: BoxDecoration(
+                                          color: activeEdition.petalColor,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
                             ),
                           ),
-                          child: Center(
-                            child: Text(
-                              ed.name.replaceFirst('Vivienne ', ''),
-                              style: const TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF2B1105),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  activeEdition.name,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF2B1105),
+                                  ),
+                                ),
+                                Text(
+                                  activeEdition.perkLabel,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 10.2,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF8B1E24),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: VivienneSkiEdition.values
+                            .map((VivienneSkiEdition ed) {
+                          final bool selected = _engine.selectedEdition == ed;
+                          final String shortLabel = switch (ed) {
+                            VivienneSkiEdition.speedyV03 => 'Speedy v03',
+                            VivienneSkiEdition.neoBlossom => 'Blossom',
+                            VivienneSkiEdition.malleImperialeOr => 'Impériale',
+                            VivienneSkiEdition.nuitAsnieres => 'Asnières',
+                          };
+                          return Expanded(
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 2),
+                              child: GestureDetector(
+                                key: Key('select_edition_${ed.id}'),
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {
+                                  HapticFeedback.selectionClick();
+                                  _engine.selectEdition(ed);
+                                },
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 140),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 3,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: selected
+                                        ? const Color(0xFFFFD700)
+                                        : Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: const Color(0xFF2B1105),
+                                      width: selected ? 2.2 : 1.5,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    shortLabel,
+                                    textAlign: TextAlign.center,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 9.8,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF2B1105),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                      );
-                    },
+                          );
+                        }).toList(),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
 
                 // 3 Ski Tracks Selection Cards
                 for (final SkiTrackId track in SkiTrackId.values) ...<Widget>[
                   _buildTrackCard(track),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 7),
                 ],
 
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
 
                 // Primary Play Button: DÉVALER LA PISTE !
                 SizedBox(
@@ -570,7 +798,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                     lipColor: const Color(0xFF008E46),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
-                      vertical: 12,
+                      vertical: 11,
                     ),
                     onTap: () => _engine.startRun(),
                     child: const Row(
@@ -578,7 +806,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                       children: <Widget>[
                         SkiCartoonEmblemBadge(
                           kind: SkiCartoonEmblemKind.playSkiTriangle,
-                          size: 28,
+                          size: 26,
                         ),
                         SizedBox(width: 10),
                         Flexible(
@@ -586,7 +814,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                             'DÉVALER LA PISTE !',
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 18,
+                              fontSize: 17.5,
                               fontWeight: FontWeight.w900,
                               color: Color(0xFF2B1105),
                             ),
@@ -596,7 +824,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 9),
 
                 // Secondary Action Row: TABLEAU DES SCORES & GALERIE VIVIENNE 3D
                 Row(
@@ -607,8 +835,8 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                         backgroundColor: const Color(0xFFFFD700),
                         lipColor: const Color(0xFFB26A00),
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 10,
+                          horizontal: 6,
+                          vertical: 9,
                         ),
                         onTap: () => _engine.openHighscores(),
                         child: const Row(
@@ -616,15 +844,15 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                           children: <Widget>[
                             SkiCartoonEmblemBadge(
                               kind: SkiCartoonEmblemKind.skiTrophyCup,
-                              size: 24,
+                              size: 22,
                             ),
-                            SizedBox(width: 6),
+                            SizedBox(width: 5),
                             Flexible(
                               child: Text(
-                                'SCORES',
+                                'TABLEAU SCORES',
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  fontSize: 13,
+                                  fontSize: 11.5,
                                   fontWeight: FontWeight.w900,
                                   color: Color(0xFF2B1105),
                                 ),
@@ -634,15 +862,15 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: JuicySki3DButton(
                         key: const Key('open_turntable_gallery_button'),
                         backgroundColor: const Color(0xFF80D8FF),
                         lipColor: const Color(0xFF0277BD),
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 10,
+                          horizontal: 6,
+                          vertical: 9,
                         ),
                         onTap: () => _engine.openTurntableGallery(),
                         child: const Row(
@@ -650,15 +878,15 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                           children: <Widget>[
                             SkiCartoonEmblemBadge(
                               kind: SkiCartoonEmblemKind.turntableGallery,
-                              size: 24,
+                              size: 22,
                             ),
-                            SizedBox(width: 6),
+                            SizedBox(width: 5),
                             Flexible(
                               child: Text(
                                 'GALERIE 3D',
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  fontSize: 13,
+                                  fontSize: 11.5,
                                   fontWeight: FontWeight.w900,
                                   color: Color(0xFF2B1105),
                                 ),
@@ -691,7 +919,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFFFFF3C4) : Colors.white,
           borderRadius: BorderRadius.circular(18),
@@ -701,7 +929,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
           ),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: isSelected ? track.badgeLipColor : const Color(0x22000000),
+              color: isSelected ? track.badgeLipColor : const Color(0x26000000),
               blurRadius: 0,
               offset: Offset(0, isSelected ? 4 : 2),
             ),
@@ -709,25 +937,51 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
         ),
         child: Row(
           children: <Widget>[
-            SkiCartoonEmblemBadge(kind: _emblemForTrack(track), size: 38),
-            const SizedBox(width: 10),
+            SkiCartoonEmblemBadge(kind: _emblemForTrack(track), size: 36),
+            const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(
-                    track.difficultyLabel,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      color: track.badgeLipColor,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: <Widget>[
+                      Flexible(
+                        child: Text(
+                          track.difficultyLabel,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 9.8,
+                            fontWeight: FontWeight.w900,
+                            color: track.badgeLipColor,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2B1105),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '$best pts',
+                          style: const TextStyle(
+                            fontSize: 10.0,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFFFFD700),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   Text(
                     track.title,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: 13.2,
                       fontWeight: FontWeight.w900,
                       color: Color(0xFF2B1105),
                     ),
@@ -736,27 +990,12 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                     track.summaryMetrics,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 10.2,
+                      fontWeight: FontWeight.w800,
                       color: Color(0xFF5D4037),
                     ),
                   ),
                 ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2B1105),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '$best pts',
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFFFFD700),
-                ),
               ),
             ),
           ],
@@ -771,90 +1010,137 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
 
   Widget _buildActiveSkiHud() {
     final SkiTrackId track = _engine.selectedTrack;
+    final Color speedColor = _speedDynamicColor(_engine.speedKmh, track);
+    final bool isAirborne =
+        _engine.animState == VivienneSkiAnimState.airborneCelebration ||
+            _engine.animState == VivienneSkiAnimState.rampLaunchStretch;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+      // Maintain >=16dp edge margin for system gesture safety on Android/iOS
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: <Widget>[
-          // Top HUD Bar: Speed, Progress, Score & Menu/Calibrate
+          // Top HUD Bar: Speed, Progress, Score & Menu
           Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xE8FFF8E7),
+                  color: const Color(0xF0FFF8E7),
                   borderRadius: BorderRadius.circular(20),
                   border:
                       Border.all(color: const Color(0xFF2B1105), width: 2.6),
+                  boxShadow: const <BoxShadow>[
+                    BoxShadow(
+                      color: Color(0x552B1105),
+                      blurRadius: 0,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: <Widget>[
-                    // Interpolated Speed Counter (km/h)
+                    // Interpolated Speed Counter (km/h) with Dynamic Color Code
                     Expanded(
-                      child: TweenAnimationBuilder<double>(
-                        tween: Tween<double>(end: _engine.speedKmh),
-                        duration: const Duration(milliseconds: 140),
-                        builder: (BuildContext context, double spd, _) {
-                          return Text(
-                            '${spd.round()} km/h',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF0277BD),
-                            ),
-                          );
-                        },
+                      child: RepaintBoundary(
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween<double>(end: _engine.speedKmh),
+                          duration: const Duration(milliseconds: 140),
+                          curve: Curves.easeOutCubic,
+                          builder: (BuildContext context, double spd, _) {
+                            return Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                Container(
+                                  width: 10,
+                                  height: 10,
+                                  decoration: BoxDecoration(
+                                    color: speedColor,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: const Color(0xFF2B1105),
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Flexible(
+                                  child: Text(
+                                    '${spd.round()} km/h',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 15.5,
+                                      fontWeight: FontWeight.w900,
+                                      color: speedColor,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
                       ),
                     ),
                     // Interpolated Live Score & Blossoms
                     Expanded(
-                      child: TweenAnimationBuilder<double>(
-                        tween: Tween<double>(end: _engine.liveScore.toDouble()),
-                        duration: const Duration(milliseconds: 180),
-                        builder: (BuildContext context, double sc, _) {
-                          return Text(
-                            '${sc.round()} pts • ${_engine.blossomsCollected} fl.',
-                            textAlign: TextAlign.center,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF2B1105),
-                            ),
-                          );
-                        },
+                      child: RepaintBoundary(
+                        child: TweenAnimationBuilder<double>(
+                          tween:
+                              Tween<double>(end: _engine.liveScore.toDouble()),
+                          duration: const Duration(milliseconds: 180),
+                          curve: Curves.easeOutCubic,
+                          builder: (BuildContext context, double sc, _) {
+                            return Text(
+                              '${sc.round()} pts • ${_engine.blossomsCollected} fl.',
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13.0,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF2B1105),
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ),
+                    const SizedBox(width: 4),
                     GestureDetector(
                       key: const Key('hud_menu_button'),
-                      onTap: () => _engine.returnToMainMenu(),
-                      child: Container(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        _engine.returnToMainMenu();
+                      },
+                      child: ConstrainedBox(
                         constraints: const BoxConstraints(
-                          minWidth: 44,
-                          minHeight: 36,
+                          minWidth: 48,
+                          minHeight: 40,
                         ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFD700),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: const Color(0xFF2B1105),
-                            width: 2.0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
                           ),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'MENU',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF2B1105),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFD700),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color(0xFF2B1105),
+                              width: 2.0,
+                            ),
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'MENU',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF2B1105),
+                              ),
                             ),
                           ),
                         ),
@@ -865,13 +1151,17 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
               ),
               const SizedBox(height: 6),
 
-              // Track Progress Bar + Active Vivienne Anim Badge
+              // Track Progress Bar (0 m -> 1200/1800/2500 m) with Finish Flag + Active Vivienne Anim & Trick Badge
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xD82B1105),
+                  color: const Color(0xDD2B1105),
                   borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.white24,
+                    width: 1.4,
+                  ),
                 ),
                 child: Column(
                   children: <Widget>[
@@ -879,23 +1169,48 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: <Widget>[
                         Flexible(
-                          child: Text(
-                            _engine.animState.label,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w900,
-                              color: _engine.animState.badgeColor,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              if (isAirborne) ...<Widget>[
+                                const SkiCartoonEmblemBadge(
+                                  kind: SkiCartoonEmblemKind.jumpTrickStar,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 4),
+                              ],
+                              Flexible(
+                                child: Text(
+                                  _engine.animState.label,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w900,
+                                    color: _engine.animState.badgeColor,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        Text(
-                          '${_engine.playerZ.round()} / ${track.lengthMeters.round()} m',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Text(
+                              '${_engine.playerZ.round()} / ${track.lengthMeters.round()} m',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(
+                              Icons.flag_rounded,
+                              size: 14,
+                              color: Color(0xFFFFD700),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -917,25 +1232,38 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
           ),
 
           // Thumb-Zone Bottom Controls: Touch Steer Left / Accelerometer Tilt Gauge / Touch Steer Right
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: Row(
-              children: <Widget>[
-                Listener(
-                  key: const Key('touch_steer_left_button'),
-                  onPointerDown: (_) => _engine.setManualTilt(-0.85),
-                  onPointerUp: (_) => _engine.clearManualTilt(),
-                  onPointerCancel: (_) => _engine.clearManualTilt(),
+          Row(
+            children: <Widget>[
+              Listener(
+                key: const Key('touch_steer_left_button'),
+                onPointerDown: (_) {
+                  HapticFeedback.selectionClick();
+                  _engine.setManualTilt(-0.85);
+                },
+                onPointerUp: (_) => _engine.clearManualTilt(),
+                onPointerCancel: (_) => _engine.clearManualTilt(),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minWidth: 58,
+                    minHeight: 54,
+                  ),
                   child: Container(
-                    width: 64,
+                    width: 62,
                     height: 54,
                     decoration: BoxDecoration(
-                      color: const Color(0xE6FFF8E7),
+                      color: const Color(0xEEFFF8E7),
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
                         color: const Color(0xFF2B1105),
-                        width: 2.5,
+                        width: 2.6,
                       ),
+                      boxShadow: const <BoxShadow>[
+                        BoxShadow(
+                          color: Color(0xFF4A2511),
+                          blurRadius: 0,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: const Center(
                       child: Icon(
@@ -946,47 +1274,65 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xD92B1105),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: const Color(0xFFFFD700),
-                        width: 1.8,
-                      ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xE02B1105),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: const Color(0xFFFFD700),
+                      width: 2.0,
                     ),
-                    child: Row(
-                      children: <Widget>[
-                        const SkiCartoonEmblemBadge(
-                          kind: SkiCartoonEmblemKind.accelerometerTilt,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      const SkiCartoonEmblemBadge(
+                        kind: SkiCartoonEmblemKind.accelerometerTilt,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Container(
+                          height: 16,
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.black38,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           child: Align(
-                            alignment:
-                                Alignment(_engine.effectiveTiltX, 0.0),
+                            alignment: Alignment(_engine.effectiveTiltX, 0.0),
                             child: Container(
-                              width: 20,
-                              height: 12,
+                              width: 22,
+                              height: 11,
                               decoration: BoxDecoration(
                                 color: const Color(0xFF00E676),
                                 borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 1.2,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        GestureDetector(
-                          key: const Key('calibrate_accelerometer_button'),
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            _engine.calibrateAccelerometer();
-                          },
+                      ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        key: const Key('calibrate_accelerometer_button'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          _engine.calibrateAccelerometer();
+                        },
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            minWidth: 48,
+                            minHeight: 36,
+                          ),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
@@ -995,37 +1341,59 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                             decoration: BoxDecoration(
                               color: const Color(0xFFFFD700),
                               borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: const Color(0xFF2B1105),
+                                width: 1.6,
+                              ),
                             ),
-                            child: const Text(
-                              'CALIBRER',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF2B1105),
+                            child: const Center(
+                              child: Text(
+                                'CALIBRER',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF2B1105),
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Listener(
-                  key: const Key('touch_steer_right_button'),
-                  onPointerDown: (_) => _engine.setManualTilt(0.85),
-                  onPointerUp: (_) => _engine.clearManualTilt(),
-                  onPointerCancel: (_) => _engine.clearManualTilt(),
+              ),
+              const SizedBox(width: 8),
+              Listener(
+                key: const Key('touch_steer_right_button'),
+                onPointerDown: (_) {
+                  HapticFeedback.selectionClick();
+                  _engine.setManualTilt(0.85);
+                },
+                onPointerUp: (_) => _engine.clearManualTilt(),
+                onPointerCancel: (_) => _engine.clearManualTilt(),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minWidth: 58,
+                    minHeight: 54,
+                  ),
                   child: Container(
-                    width: 64,
+                    width: 62,
                     height: 54,
                     decoration: BoxDecoration(
-                      color: const Color(0xE6FFF8E7),
+                      color: const Color(0xEEFFF8E7),
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
                         color: const Color(0xFF2B1105),
-                        width: 2.5,
+                        width: 2.6,
                       ),
+                      boxShadow: const <BoxShadow>[
+                        BoxShadow(
+                          color: Color(0xFF4A2511),
+                          blurRadius: 0,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: const Center(
                       child: Icon(
@@ -1036,8 +1404,8 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1067,7 +1435,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
             return Transform.scale(scale: scale, child: child);
           },
           child: Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
             decoration: BoxDecoration(
               color: const Color(0xFFFFF8E7),
               borderRadius: BorderRadius.circular(28),
@@ -1084,6 +1452,8 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
+                  const _CartoonSnowCapDecoration(height: 12),
+                  const SizedBox(height: 4),
                   Row(
                     children: <Widget>[
                       const SkiCartoonEmblemBadge(
@@ -1095,7 +1465,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                         child: Text(
                           'TABLEAU DES SCORES',
                           style: TextStyle(
-                            fontSize: 19,
+                            fontSize: 18.5,
                             fontWeight: FontWeight.w900,
                             color: Color(0xFF2B1105),
                           ),
@@ -1120,7 +1490,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                   ),
                   const SizedBox(height: 10),
 
-                  // Track Filter Tabs
+                  // Track Filter Tabs (Verte, Bleue, Noire Or)
                   Row(
                     children: SkiTrackId.values.map((SkiTrackId t) {
                       final bool sel = activeFilter == t;
@@ -1128,7 +1498,12 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 3),
                           child: GestureDetector(
-                            onTap: () => _engine.setHighscoresFilterTrack(t),
+                            key: Key('filter_highscores_${t.id}'),
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              _engine.setHighscoresFilterTrack(t);
+                            },
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               decoration: BoxDecoration(
@@ -1160,6 +1535,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                   ),
                   const SizedBox(height: 10),
 
+                  // Gold / Silver / Bronze Medal Rows
                   for (int i = 0; i < math.min(5, entries.length); i++)
                     Container(
                       margin: const EdgeInsets.only(bottom: 6),
@@ -1180,27 +1556,31 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                       child: Row(
                         children: <Widget>[
                           Container(
-                            width: 28,
-                            height: 28,
+                            width: 32,
+                            height: 32,
                             decoration: BoxDecoration(
                               color: i == 0
-                                  ? const Color(0xFFFFD700)
+                                  ? const Color(0xFFFFD700) // Gold
                                   : (i == 1
-                                      ? const Color(0xFFCFD8DC)
+                                      ? const Color(0xFFCFD8DC) // Silver
                                       : (i == 2
-                                          ? const Color(0xFFFFB74D)
+                                          ? const Color(0xFFFFB74D) // Bronze
                                           : const Color(0xFFEEEEEE))),
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: const Color(0xFF2B1105),
-                                width: 1.6,
+                                width: 1.8,
                               ),
                             ),
                             child: Center(
                               child: Text(
-                                '#${i + 1}',
+                                i == 0
+                                    ? 'OR'
+                                    : (i == 1
+                                        ? 'ARG'
+                                        : (i == 2 ? 'BRZ' : '#${i + 1}')),
                                 style: const TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 9.5,
                                   fontWeight: FontWeight.w900,
                                   color: Color(0xFF2B1105),
                                 ),
@@ -1221,13 +1601,23 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                                     color: Color(0xFF2B1105),
                                   ),
                                 ),
-                                Text(
-                                  '${entries[i].timeSeconds.toStringAsFixed(1)}s • Saut ${entries[i].maxJumpMeters.toStringAsFixed(1)}m',
-                                  style: const TextStyle(
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF5D4037),
-                                  ),
+                                Row(
+                                  children: <Widget>[
+                                    Text(
+                                      '${entries[i].timeSeconds.toStringAsFixed(1)}s • Saut ${entries[i].maxJumpMeters.toStringAsFixed(1)}m • ',
+                                      style: const TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF5D4037),
+                                      ),
+                                    ),
+                                    for (int s = 0; s < entries[i].stars; s++)
+                                      const Icon(
+                                        Icons.star_rounded,
+                                        size: 12,
+                                        color: Color(0xFFFFB300),
+                                      ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -1253,10 +1643,10 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                       lipColor: const Color(0xFF008E46),
                       onTap: () => _engine.startRun(track: activeFilter),
                       child: Text(
-                        'SKIER : ${activeFilter.shortTitle.toUpperCase()} !',
+                        'SKIER CETTE PISTE (${activeFilter.shortTitle.toUpperCase()}) !',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
-                          fontSize: 15,
+                          fontSize: 14,
                           fontWeight: FontWeight.w900,
                           color: Color(0xFF2B1105),
                         ),
@@ -1288,165 +1678,182 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
       color: const Color(0x99000000),
       padding: const EdgeInsets.all(16),
       child: Center(
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFF8E7),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: const Color(0xFF2B1105), width: 3.2),
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    const SkiCartoonEmblemBadge(
-                      kind: SkiCartoonEmblemKind.turntableGallery,
-                      size: 32,
-                    ),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'GALERIE VIVIENNE 3D (360°)',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w900,
+        child: TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: 0.88, end: 1.0),
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.elasticOut,
+          builder: (BuildContext context, double scale, Widget? child) {
+            return Transform.scale(scale: scale, child: child);
+          },
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF8E7),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: const Color(0xFF2B1105), width: 3.2),
+              boxShadow: const <BoxShadow>[
+                BoxShadow(
+                  color: Color(0xFF4A2511),
+                  blurRadius: 0,
+                  offset: Offset(0, 7),
+                ),
+              ],
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const _CartoonSnowCapDecoration(height: 12),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: <Widget>[
+                      const SkiCartoonEmblemBadge(
+                        kind: SkiCartoonEmblemKind.turntableGallery,
+                        size: 32,
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'GALERIE VIVIENNE 3D (360°)',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF2B1105),
+                          ),
+                        ),
+                      ),
+                      JuicySki3DButton(
+                        key: const Key('close_turntable_gallery_button'),
+                        backgroundColor: const Color(0xFFFF8A80),
+                        lipColor: const Color(0xFFC62828),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        onTap: () => _engine.closeTurntableGallery(),
+                        child: const Icon(
+                          Icons.close_rounded,
+                          size: 20,
                           color: Color(0xFF2B1105),
                         ),
                       ),
-                    ),
-                    JuicySki3DButton(
-                      key: const Key('close_turntable_gallery_button'),
-                      backgroundColor: const Color(0xFFFF8A80),
-                      lipColor: const Color(0xFFC62828),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  GestureDetector(
+                    onHorizontalDragUpdate: (DragUpdateDetails d) {
+                      _engine.rotateTurntableBy(d.delta.dx * 1.2);
+                    },
+                    child: Container(
+                      height: 225,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        gradient: const RadialGradient(
+                          colors: <Color>[Color(0xFFFFFFFF), Color(0xFFB3E5FC)],
+                        ),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(
+                          color: const Color(0xFF2B1105),
+                          width: 2.4,
+                        ),
                       ),
-                      onTap: () => _engine.closeTurntableGallery(),
-                      child: const Icon(
-                        Icons.close_rounded,
-                        size: 20,
-                        color: Color(0xFF2B1105),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                GestureDetector(
-                  onHorizontalDragUpdate: (DragUpdateDetails d) {
-                    _engine.rotateTurntableBy(d.delta.dx * 1.2);
-                  },
-                  child: Container(
-                    height: 230,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      gradient: const RadialGradient(
-                        colors: <Color>[Color(0xFFFFFFFF), Color(0xFFB3E5FC)],
-                      ),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(
-                        color: const Color(0xFF2B1105),
-                        width: 2.4,
+                      child: Center(
+                        child: frameImage != null
+                            ? RawImage(image: frameImage, fit: BoxFit.contain)
+                            : Image.asset(
+                                VivienneTurntableSpec.assetPathForIndex(idx),
+                                fit: BoxFit.contain,
+                              ),
                       ),
                     ),
-                    child: Center(
-                      child: frameImage != null
-                          ? RawImage(image: frameImage, fit: BoxFit.contain)
-                          : Image.asset(
-                              VivienneTurntableSpec.assetPathForIndex(idx),
-                              fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _engine.turntableAngleLabel,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF2B1105),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Inclinez votre téléphone ou glissez pour tourner Vivienne à 360° (vivienne_speedy_v03.blend)',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF5D4037),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: JuicySki3DButton(
+                          key: const Key('turntable_rotate_left_button'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 10,
+                          ),
+                          onTap: () => _engine.rotateTurntableBy(-15.0),
+                          child: const Text(
+                            '-15°',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
                             ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _engine.turntableAngleLabel,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF2B1105),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Inclinez votre téléphone ou glissez pour tourner Vivienne à 360° (vivienne_speedy_v03.blend)',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF5D4037),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: JuicySki3DButton(
-                        key: const Key('turntable_rotate_left_button'),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 10,
-                        ),
-                        onTap: () => _engine.rotateTurntableBy(-15.0),
-                        child: const Text(
-                          '-15°',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      flex: 2,
-                      child: JuicySki3DButton(
-                        key: const Key('turntable_rear_180_button'),
-                        backgroundColor: const Color(0xFF80D8FF),
-                        lipColor: const Color(0xFF0277BD),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 10,
-                        ),
-                        onTap: () => _engine.setTurntableAngle(180.0),
-                        child: const Text(
-                          'DOS 180° (SKI)',
-                          textAlign: TextAlign.center,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
+                      const SizedBox(width: 6),
+                      Expanded(
+                        flex: 2,
+                        child: JuicySki3DButton(
+                          key: const Key('turntable_rear_180_button'),
+                          backgroundColor: const Color(0xFF80D8FF),
+                          lipColor: const Color(0xFF0277BD),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 10,
+                          ),
+                          onTap: () => _engine.setTurntableAngle(180.0),
+                          child: const Text(
+                            'DOS 180° (SKI)',
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: JuicySki3DButton(
-                        key: const Key('turntable_rotate_right_button'),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 10,
-                        ),
-                        onTap: () => _engine.rotateTurntableBy(15.0),
-                        child: const Text(
-                          '+15°',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: JuicySki3DButton(
+                          key: const Key('turntable_rotate_right_button'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 10,
+                          ),
+                          onTap: () => _engine.rotateTurntableBy(15.0),
+                          child: const Text(
+                            '+15°',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1461,6 +1868,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
   Widget _buildTrackFinishedOverlay() {
     final SkiScoreBreakdown? b = _engine.lastRunBreakdown;
     final int stars = b?.starsEarned ?? 3;
+    final int rank = _engine.lastRunRank ?? 1;
 
     return Container(
       key: const Key('track_finished_overlay'),
@@ -1469,26 +1877,35 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
       child: Center(
         child: TweenAnimationBuilder<double>(
           tween: Tween<double>(begin: 0.85, end: 1.0),
-          duration: const Duration(milliseconds: 240),
+          duration: const Duration(milliseconds: 260),
           curve: Curves.elasticOut,
           builder: (BuildContext context, double scale, Widget? child) {
             return Transform.scale(scale: scale, child: child);
           },
           child: Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             decoration: BoxDecoration(
               color: const Color(0xFFFFF8E7),
               borderRadius: BorderRadius.circular(28),
               border: Border.all(color: const Color(0xFF2B1105), width: 3.2),
+              boxShadow: const <BoxShadow>[
+                BoxShadow(
+                  color: Color(0xFF4A2511),
+                  blurRadius: 0,
+                  offset: Offset(0, 7),
+                ),
+              ],
             ),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
+                  const _CartoonSnowCapDecoration(height: 12),
+                  const SizedBox(height: 4),
                   const Text(
                     'ARRIVÉE AU CHALET !',
                     style: TextStyle(
-                      fontSize: 22,
+                      fontSize: 21,
                       fontWeight: FontWeight.w900,
                       color: Color(0xFF2B1105),
                     ),
@@ -1509,6 +1926,31 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                       );
                     }),
                   ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _engine.lastRunIsNewRecord
+                          ? const Color(0xFFFFD700)
+                          : const Color(0xFFE1F5FE),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFF2B1105),
+                        width: 1.8,
+                      ),
+                    ),
+                    child: Text(
+                      _engine.lastRunIsNewRecord
+                          ? 'NOUVEAU RECORD ! • RANG #$rank (${_engine.selectedTrack.shortTitle})'
+                          : 'CLASSEMENT PISTE : RANG #$rank (${_engine.selectedTrack.shortTitle})',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF2B1105),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     'SCORE TOTAL : ${b?.totalScore ?? _engine.liveScore} PTS',
@@ -1519,14 +1961,40 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                     ),
                   ),
                   if (b != null) ...<Widget>[
-                    const SizedBox(height: 6),
-                    Text(
-                      'Fleurs Blossom : +${b.blossomPoints} • Slalom : +${b.slalomPoints}\nFigures & Bosses : +${b.jumpAndMogulPoints} • Bonus Chrono : +${b.chronoBonusPoints}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF5D4037),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFF2B1105),
+                          width: 1.8,
+                        ),
+                      ),
+                      child: Column(
+                        children: <Widget>[
+                          _buildScoreDetailRow(
+                            'Points Glisse (${_engine.selectedTrack.lengthMeters.round()} m)',
+                            '+${b.distancePoints} pts',
+                          ),
+                          _buildScoreDetailRow(
+                            'Fleurs Blossom (${b.blossomsCollected})',
+                            '+${b.blossomPoints} pts',
+                          ),
+                          _buildScoreDetailRow(
+                            'Portes de Slalom (${b.slalomPassed})',
+                            '+${b.slalomPoints} pts',
+                          ),
+                          _buildScoreDetailRow(
+                            'Figures de Saut & Bosses (${b.jumpsCompleted} sauts • ${b.mogulsAbsorbed} bosses)',
+                            '+${b.jumpAndMogulPoints} pts',
+                          ),
+                          _buildScoreDetailRow(
+                            'Bonus Chrono (${b.elapsedSeconds.toStringAsFixed(1)}s)',
+                            '+${b.chronoBonusPoints} pts',
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -1540,9 +2008,12 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                           lipColor: const Color(0xFFB26A00),
                           onTap: () => _engine.restartCurrentTrack(),
                           child: const Text(
-                            'REJOUER',
+                            'REJOUER LA PISTE',
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontWeight: FontWeight.w900),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
                       ),
@@ -1556,7 +2027,10 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                           child: const Text(
                             'PISTE SUIVANTE',
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontWeight: FontWeight.w900),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
                       ),
@@ -1573,7 +2047,10 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                       child: const Text(
                         'MENU D\'ACCUEIL',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontWeight: FontWeight.w900),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ),
                   ),
@@ -1582,6 +2059,37 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildScoreDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.5),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11.2,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF5D4037),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF2B1105),
+            ),
+          ),
+        ],
       ),
     );
   }

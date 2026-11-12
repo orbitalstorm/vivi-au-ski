@@ -130,7 +130,7 @@ void main() {
       engine.calibrateAccelerometer();
       expect(engine.effectiveTiltX, closeTo(0.0, 1e-4));
 
-      // 2. Mogul absorption Squash (`mogulAbsorptionSquash`) at first centered mogul (`z = 52m`)
+      // 2. Mogul absorption Squash (`mogulAbsorptionSquash`) & Jump Ramp celebration (`airborneCelebration`)
       engine.startRun(track: SkiTrackId.greenBlossomValley);
       bool sawMogulSquash = false;
       bool sawAirborneJump = false;
@@ -164,7 +164,7 @@ void main() {
   );
 
   testWidgets(
-    'Cartoon Main Menu, 3 Track Selectors, Highscores Modal, 360 Turntable Gallery & 1080x2400 Store Screenshots',
+    'Cartoon Main Menu, 4 Vivienne Editions, 3 Track Selectors, Highscores Modal, 360 Turntable Gallery, Chalet Finish & 1080x2400 Store Screenshots',
     (WidgetTester tester) async {
       await tester.binding.setSurfaceSize(const Size(360, 800));
       addTearDown(() async => tester.binding.setSurfaceSize(null));
@@ -184,7 +184,7 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Starts on Cartoon Main Menu without Highscores modal open
+      // 1. Starts on Cartoon Main Menu without Highscores modal open
       expect(find.byKey(const Key('main_menu_overlay')), findsOneWidget);
       expect(find.byKey(const Key('highscores_modal_overlay')), findsNothing);
 
@@ -194,7 +194,17 @@ void main() {
         'screenshots/01_menu_accueil_cartoon_3_pistes.png',
       );
 
-      // Select Blue Track and Black Gold Track
+      // 2. Select Vivienne Editions and the 3 Ski Tracks (Green, Blue, Black Gold)
+      await tester.tap(find.byKey(const Key('select_edition_malle_imperiale_or')));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        engine.selectedEdition,
+        equals(VivienneSkiEdition.malleImperialeOr),
+      );
+      await tester.tap(find.byKey(const Key('select_edition_speedy_v03')));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(engine.selectedEdition, equals(VivienneSkiEdition.speedyV03));
+
       await tester.tap(find.byKey(const Key('select_track_piste_bleue')));
       await tester.pump(const Duration(milliseconds: 120));
       expect(engine.selectedTrack, equals(SkiTrackId.blueAsnieresForest));
@@ -203,7 +213,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 120));
       expect(engine.selectedTrack, equals(SkiTrackId.blackVendomePeaks));
 
-      // Open Highscores Modal
+      // 3. Open Highscores Modal & filter by track
       await tester.tap(find.byKey(const Key('open_highscores_button')));
       await tester.pump(const Duration(milliseconds: 220));
       expect(find.byKey(const Key('highscores_modal_overlay')), findsOneWidget);
@@ -214,11 +224,18 @@ void main() {
         'screenshots/02_tableau_des_scores_pistes.png',
       );
 
+      await tester.tap(find.byKey(const Key('filter_highscores_piste_verte')));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        engine.highscoresFilterTrack,
+        equals(SkiTrackId.greenBlossomValley),
+      );
+
       await tester.tap(find.byKey(const Key('close_highscores_button')));
       await tester.pump(const Duration(milliseconds: 120));
       expect(find.byKey(const Key('highscores_modal_overlay')), findsNothing);
 
-      // Open 360° Vivienne Turntable Gallery & tilt rotate
+      // 4. Open 360° Vivienne Turntable Gallery & tilt rotate
       await tester.tap(find.byKey(const Key('open_turntable_gallery_button')));
       await tester.pump(const Duration(milliseconds: 180));
       expect(find.byKey(const Key('vivienne_gallery_panel')), findsOneWidget);
@@ -235,7 +252,7 @@ void main() {
       await tester.tap(find.byKey(const Key('close_turntable_gallery_button')));
       await tester.pump(const Duration(milliseconds: 120));
 
-      // Select Green Track & Start 3D Ski Run
+      // 5. Select Green Track & Start 3D Ski Run
       await tester.tap(find.byKey(const Key('select_track_piste_verte')));
       await tester.pump(const Duration(milliseconds: 100));
       await tester.tap(find.byKey(const Key('start_ski_run_button')));
@@ -257,6 +274,14 @@ void main() {
         screenshotKey,
         'screenshots/04_ski_3d_vue_dos_grand_saut_vivienne.png',
       );
+
+      // 6. Verify Chalet Finish Overlay (`track_finished_overlay`)
+      engine.forceFinishRunForTest();
+      await tester.pump(const Duration(milliseconds: 280));
+      expect(find.byKey(const Key('track_finished_overlay')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('finish_return_menu_button')));
+      await tester.pump(const Duration(milliseconds: 140));
+      expect(find.byKey(const Key('main_menu_overlay')), findsOneWidget);
 
       final bool exists = (await tester.runAsync(
         () async =>
