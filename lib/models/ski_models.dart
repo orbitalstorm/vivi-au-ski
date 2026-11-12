@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// The 3 completely skiable 3D Alpine tracks in `VIVI AU SKI : Descente Royale 3D`.
+/// The 3 completely skiable 3D Alpine tracks in `VIVI AU SKI : Descente Royale 3D` (`v1.1.0`).
 enum SkiTrackId {
   greenBlossomValley(
     id: 'piste_verte',
@@ -8,17 +8,18 @@ enum SkiTrackId {
     title: 'Vallée Blossom Ensoleillée',
     shortTitle: 'Piste Verte',
     difficultyLabel: 'PISTE VERTE • DÉBUTANT',
-    summaryMetrics: '1 200 m • 14° • 4 Tremplins • 8 Bosses',
+    summaryMetrics: '1 200 m • Dénivelé -535 m (24°) • 4 Tremplins',
     description:
-        'Ciel azur alpin, soleil radieux, larges courbes damées, sapins enneigés espacés et 4 tremplins panoramiques.',
+        'Ciel azur alpin, soleil radieux, pente dynamique à 24° (-535 m), banderoles LV_NEO, télécabines et 4 tremplins panoramiques.',
     lengthMeters: 1200.0,
-    slopeDegrees: 14.0,
-    baseSpeedKmh: 42.0,
-    maxSpeedKmh: 78.0,
-    targetTimeSeconds: 65.0,
+    verticalDropMeters: 535.0,
+    slopeDegrees: 24.0,
+    baseSpeedKmh: 62.0,
+    maxSpeedKmh: 108.0,
+    targetTimeSeconds: 52.0,
     trackHalfWidthMeters: 15.5,
-    curveAmplitudeMeters: 9.0,
-    pineTreeCount: 40,
+    curveAmplitudeMeters: 9.5,
+    pineTreeCount: 42,
     mogulCount: 8,
     jumpRampCount: 4,
     slalomGateCount: 10,
@@ -45,17 +46,18 @@ enum SkiTrackId {
     title: 'Forêt des Sapins d\'Asnières',
     shortTitle: 'Piste Bleue',
     difficultyLabel: 'PISTE BLEUE • CARVING',
-    summaryMetrics: '1 800 m • 22° • 7 Tremplins • 16 Bosses',
+    summaryMetrics: '1 800 m • Dénivelé -980 m (34°) • 7 Tremplins',
     description:
-        'Soleil couchant doré, forêt dense de grands sapins enneigés, virages sinueux de carving et 16 bosses rythmées.',
+        'Soleil couchant doré, fort dénivelé -980 m (34°), sapins enneigés, banderoles LV_NEO et 16 bosses rythmées.',
     lengthMeters: 1800.0,
-    slopeDegrees: 22.0,
-    baseSpeedKmh: 58.0,
-    maxSpeedKmh: 105.0,
-    targetTimeSeconds: 80.0,
+    verticalDropMeters: 980.0,
+    slopeDegrees: 34.0,
+    baseSpeedKmh: 84.0,
+    maxSpeedKmh: 142.0,
+    targetTimeSeconds: 64.0,
     trackHalfWidthMeters: 14.0,
-    curveAmplitudeMeters: 13.5,
-    pineTreeCount: 68,
+    curveAmplitudeMeters: 14.0,
+    pineTreeCount: 70,
     mogulCount: 16,
     jumpRampCount: 7,
     slalomGateCount: 14,
@@ -82,17 +84,18 @@ enum SkiTrackId {
     title: 'Cimes Étoilées Vendôme',
     shortTitle: 'Piste Noire Or',
     difficultyLabel: 'PISTE NOIRE OR • EXPERT',
-    summaryMetrics: '2 500 m • 32° • 10 Méga-Sauts • 24 Bosses',
+    summaryMetrics: '2 500 m • Dénivelé -1 650 m (45°) • 10 Méga-Sauts',
     description:
-        'Nuit alpine étoilée sous aurore boréale émeraude & or, sapins givrés, cristaux de glace et 10 méga-tremplins Big Air.',
+        'Nuit alpine étoilée sous aurore boréale, mur vertigineux à 45° (-1 650 m), vitesse extrême et 10 méga-tremplins Big Air.',
     lengthMeters: 2500.0,
-    slopeDegrees: 32.0,
-    baseSpeedKmh: 76.0,
-    maxSpeedKmh: 138.0,
-    targetTimeSeconds: 95.0,
+    verticalDropMeters: 1650.0,
+    slopeDegrees: 45.0,
+    baseSpeedKmh: 108.0,
+    maxSpeedKmh: 185.0,
+    targetTimeSeconds: 76.0,
     trackHalfWidthMeters: 12.8,
-    curveAmplitudeMeters: 17.5,
-    pineTreeCount: 96,
+    curveAmplitudeMeters: 18.0,
+    pineTreeCount: 98,
     mogulCount: 24,
     jumpRampCount: 10,
     slalomGateCount: 18,
@@ -123,6 +126,7 @@ enum SkiTrackId {
     required this.summaryMetrics,
     required this.description,
     required this.lengthMeters,
+    required this.verticalDropMeters,
     required this.slopeDegrees,
     required this.baseSpeedKmh,
     required this.maxSpeedKmh,
@@ -159,6 +163,7 @@ enum SkiTrackId {
   final String summaryMetrics;
   final String description;
   final double lengthMeters;
+  final double verticalDropMeters;
   final double slopeDegrees;
   final double baseSpeedKmh;
   final double maxSpeedKmh;
@@ -192,16 +197,20 @@ enum SkiTrackId {
   }
 }
 
-/// The 4 Haute Couture playable ski editions of Vivienne (`BLENDER_LAB`).
+/// The 4 official playable 3D Vivienne models from `orbitalstorm/BLENDER_LAB`.
 enum VivienneSkiEdition {
   speedyV03(
     id: 'speedy_v03',
     name: 'Vivienne Speedy v03',
-    subtitle: 'Chêne Clair, Vachetta & Mini Speedy',
+    blendPath: 'models/vivienne_speedy_v03.blend',
+    heroAssetPath: 'assets/sprites/vivienne_speedy_v03_hero.png',
+    subtitle: 'Chêne Clair, Vachetta & Mini Speedy LV',
     perkLabel: 'Glisse équilibrée +5 % • Impulsion +4 %',
     petalColor: Color(0xFFE3A17B),
     trimEdgeColor: Color(0xFF8B1E24),
     stitchGoldColor: Color(0xFFE5B842),
+    eyeFlowerColor: Color(0xFF3A2618),
+    motifColor: Color(0xFF3A2618),
     skiDeckColor: Color(0xFF2B1D14),
     skiAccentColor: Color(0xFFFFD700),
     scarfColor: Color(0xFF8B1E24),
@@ -211,66 +220,82 @@ enum VivienneSkiEdition {
     scoreMultiplier: 1.00,
     blossomMagnetMeters: 2.3,
   ),
+  wonderland(
+    id: 'wonderland',
+    name: 'Vivienne Wonderland',
+    blendPath: 'models/vivienne_wonderland.blend',
+    heroAssetPath: 'assets/sprites/vivienne_wonderland_hero.png',
+    subtitle: 'Monogram Ébène, Lapin Blanc & Ballon Cœur',
+    perkLabel: 'Big Air Féerique +12 % • Score Prestige ×1.20',
+    petalColor: Color(0xFF2B1D14),
+    trimEdgeColor: Color(0xFF6D4C41),
+    stitchGoldColor: Color(0xFFE5B842),
+    eyeFlowerColor: Color(0xFF2B95EA),
+    motifColor: Color(0xFFA6825B),
+    skiDeckColor: Color(0xFF2B1D14),
+    skiAccentColor: Color(0xFF2B95EA),
+    scarfColor: Color(0xFFD91E48),
+    glideBonusMultiplier: 1.07,
+    carvingMultiplier: 1.08,
+    jumpBoostMultiplier: 1.12,
+    scoreMultiplier: 1.20,
+    blossomMagnetMeters: 2.8,
+  ),
+  giantDenim(
+    id: 'giant_denim',
+    name: 'Vivienne Giant Denim',
+    blendPath: 'models/vivienne_giant_denim.blend',
+    heroAssetPath: 'assets/sprites/vivienne_giant_denim_hero.png',
+    subtitle: 'Denim Jacquard, Sneakers & Skateboard LV',
+    perkLabel: 'Carving Street +16 % • Vitesse de pointe +8 %',
+    petalColor: Color(0xFF3B6291),
+    trimEdgeColor: Color(0xFF1E3A5F),
+    stitchGoldColor: Color(0xFFF4F8FC),
+    eyeFlowerColor: Color(0xFFE31C58),
+    motifColor: Color(0xFFD6E2F0),
+    skiDeckColor: Color(0xFF1E3A5F),
+    skiAccentColor: Color(0xFFE31C58),
+    scarfColor: Color(0xFFE31C58),
+    glideBonusMultiplier: 1.08,
+    carvingMultiplier: 1.16,
+    jumpBoostMultiplier: 1.10,
+    scoreMultiplier: 1.25,
+    blossomMagnetMeters: 2.9,
+  ),
   neoBlossom(
     id: 'neo_blossom',
-    name: 'Vivienne Neo Blossom',
-    subtitle: 'Rose Poudré, Nacre & Écharpe Sakura',
-    perkLabel: 'Aimant Fleurs Blossom +45 % • Carving souple',
+    name: 'Vivienne LV_NEO Blossom',
+    blendPath: 'models/vivienne_lv_neo_blossom.blend',
+    heroAssetPath: 'assets/sprites/vivienne_neo_blossom_hero.png',
+    subtitle: 'Rose Sakura & Skis / Écharpe Cobalt LV_NEO',
+    perkLabel: 'Aimant Fleurs Blossom +45 % • Score ×1.15',
     petalColor: Color(0xFFF3B7C3),
-    trimEdgeColor: Color(0xFFA8243C),
+    trimEdgeColor: Color(0xFF1638E8),
     stitchGoldColor: Color(0xFFFFE082),
-    skiDeckColor: Color(0xFF4A1828),
-    skiAccentColor: Color(0xFFFFC1E3),
-    scarfColor: Color(0xFFFF4081),
-    glideBonusMultiplier: 1.03,
-    carvingMultiplier: 1.09,
-    jumpBoostMultiplier: 1.06,
-    scoreMultiplier: 1.10,
-    blossomMagnetMeters: 3.4,
-  ),
-  malleImperialeOr(
-    id: 'malle_imperiale_or',
-    name: 'Vivienne Malle Impériale',
-    subtitle: 'Place Vendôme • Or 24 Carats',
-    perkLabel: 'Score Prestige ×1.25 • Vitesse de pointe +8 %',
-    petalColor: Color(0xFFFFD700),
-    trimEdgeColor: Color(0xFF9E6B14),
-    stitchGoldColor: Color(0xFFFFF8E1),
-    skiDeckColor: Color(0xFF3E2723),
-    skiAccentColor: Color(0xFFFFEA00),
-    scarfColor: Color(0xFFFFB300),
-    glideBonusMultiplier: 1.08,
-    carvingMultiplier: 1.06,
-    jumpBoostMultiplier: 1.08,
-    scoreMultiplier: 1.25,
-    blossomMagnetMeters: 2.7,
-  ),
-  nuitAsnieres(
-    id: 'nuit_asnieres',
-    name: 'Vivienne Nuit d\'Asnières',
-    subtitle: 'Ébène, Azur & Constellation Or',
-    perkLabel: 'Carving Expert +16 % • Big Air +14 %',
-    petalColor: Color(0xFFC89D7C),
-    trimEdgeColor: Color(0xFF00ACC1),
-    stitchGoldColor: Color(0xFF80D8FF),
-    skiDeckColor: Color(0xFF0D1B2A),
-    skiAccentColor: Color(0xFF64DFDF),
-    scarfColor: Color(0xFF29B6F6),
-    glideBonusMultiplier: 1.06,
-    carvingMultiplier: 1.16,
-    jumpBoostMultiplier: 1.14,
+    eyeFlowerColor: Color(0xFF1638E8),
+    motifColor: Color(0xFFFFF0F5),
+    skiDeckColor: Color(0xFF1638E8),
+    skiAccentColor: Color(0xFFF3B7C3),
+    scarfColor: Color(0xFF1638E8),
+    glideBonusMultiplier: 1.05,
+    carvingMultiplier: 1.10,
+    jumpBoostMultiplier: 1.07,
     scoreMultiplier: 1.15,
-    blossomMagnetMeters: 2.9,
+    blossomMagnetMeters: 3.4,
   );
 
   const VivienneSkiEdition({
     required this.id,
     required this.name,
+    required this.blendPath,
+    required this.heroAssetPath,
     required this.subtitle,
     required this.perkLabel,
     required this.petalColor,
     required this.trimEdgeColor,
     required this.stitchGoldColor,
+    required this.eyeFlowerColor,
+    required this.motifColor,
     required this.skiDeckColor,
     required this.skiAccentColor,
     required this.scarfColor,
@@ -283,11 +308,15 @@ enum VivienneSkiEdition {
 
   final String id;
   final String name;
+  final String blendPath;
+  final String heroAssetPath;
   final String subtitle;
   final String perkLabel;
   final Color petalColor;
   final Color trimEdgeColor;
   final Color stitchGoldColor;
+  final Color eyeFlowerColor;
+  final Color motifColor;
   final Color skiDeckColor;
   final Color skiAccentColor;
   final Color scarfColor;
@@ -349,6 +378,13 @@ enum VivienneSkiAnimState {
     armRaiseFactor: 0.32,
     badgeColor: Color(0xFF80D8FF),
   ),
+  snowballCrash(
+    label: 'CHUTE BOULE DE NEIGE !',
+    scaleX: 1.22,
+    scaleY: 0.96,
+    armRaiseFactor: 0.90,
+    badgeColor: Color(0xFFFF5252),
+  ),
   obstacleStumble(
     label: 'REBOND SAPIN !',
     scaleX: 1.08,
@@ -400,13 +436,17 @@ enum VivienneBlenderPose {
   final String assetPath;
 }
 
-/// 3D Scenery & Obstacle kinds placed along the ski tracks.
+/// 3D Scenery & Obstacle kinds placed along the ski tracks (`v1.1.0`).
 enum SkiPropKind {
   alpinePineTree,
   giantSnowPine,
   crystalIceRock,
   alpineChalet,
   lvBannerPost,
+  cableCarPylon,
+  cartoonSnowman,
+  flutteringPennantPost,
+  snowCannon,
   startArch,
   finishArch,
 }

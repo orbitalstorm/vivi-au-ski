@@ -1,8 +1,8 @@
 name: vivi_au_ski
-description: "VIVI AU SKI : Descente Royale 3D v1.0.0 — Simulation de ski en 3D Cartoon Flutter (Android & iOS) vue de derrière mettant en scène Vivienne (BLENDER_LAB), contrôle par accéléromètre, Menu d'Accueil Cartoon, 3 pistes skiables complètes, bosses, sauts et Tableau des Scores."
+description: "VIVI AU SKI : Descente Royale 3D v1.1.0 — Simulation de ski 3D Cartoon Flutter (Android & iOS) à fort dénivelé mettant en scène les 4 modèles Vivienne (BLENDER_LAB : Speedy v03, Wonderland, Giant Denim, LV_NEO Blossom), banderoles LV_NEO, décors vivants et chute boule de neige."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ">=3.5.0 <4.0.0"

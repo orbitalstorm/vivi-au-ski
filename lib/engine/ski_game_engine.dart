@@ -85,7 +85,7 @@ class SkiGameEngine extends ChangeNotifier {
   double playerY = 0.0;
   double playerVx = 0.0;
   double playerVy = 0.0;
-  double speedKmh = 42.0;
+  double speedKmh = 62.0;
   double playerRollRadians = 0.0;
 
   double get playerWorldX =>
@@ -107,6 +107,18 @@ class SkiGameEngine extends ChangeNotifier {
   double _speedyBagAngularVel = 0.0;
   double scarfWavePhase = 0.0;
   double ambientTime = 0.0;
+
+  static const double snowballCrashDuration = 1.15;
+  double snowballCrashTimer = 0.0;
+  double snowballRotationRadians = 0.0;
+
+  bool get isInSnowballCrash =>
+      snowballCrashTimer > 0.0 ||
+      animState == VivienneSkiAnimState.snowballCrash;
+
+  double get snowballCrashProgress => snowballCrashTimer > 0.0
+      ? (1.0 - (snowballCrashTimer / snowballCrashDuration)).clamp(0.0, 1.0)
+      : 0.0;
 
   double _mogulSquashTimer = 0.0;
   double _launchStretchTimer = 0.0;
@@ -383,17 +395,20 @@ class SkiGameEngine extends ChangeNotifier {
   double trackElevationY(double z) {
     final double slopeRad = _selectedTrack.slopeDegrees * math.pi / 180.0;
     final double baseDrop = -z * math.tan(slopeRad);
-    final double undulation = math.sin(z * 0.026) * 0.85 +
-        math.cos(z * 0.058) * 0.35;
+    final double undulation = math.sin(z * 0.036) * 1.35 +
+        math.cos(z * 0.074) * 0.58;
     return baseDrop + undulation;
   }
 
-  /// Local vertical relief undulation relative to `playerZ` for 3D horizon feel.
+  /// Pronounced alpine crests ("ruptures de pente") and valley plunges relative to `playerZ`.
   double relativeReliefAtZ(double z) {
-    final double startFade = (z / 40.0).clamp(0.0, 1.0);
+    final double startFade = (z / 36.0).clamp(0.0, 1.0);
     final double endFade =
-        ((_selectedTrack.lengthMeters - z) / 60.0).clamp(0.0, 1.0);
-    return (math.sin(z * 0.032) * 0.55 + math.cos(z * 0.071) * 0.22) *
+        ((_selectedTrack.lengthMeters - z) / 55.0).clamp(0.0, 1.0);
+    final double slopeScale =
+        0.88 + (_selectedTrack.slopeDegrees / 45.0) * 0.92;
+    return (math.sin(z * 0.036) * 1.28 + math.cos(z * 0.074) * 0.56) *
+        slopeScale *
         startFade *
         endFade;
   }
@@ -425,7 +440,7 @@ class SkiGameEngine extends ChangeNotifier {
 
     if (isInMenu || isPaused || isTrackFinished) {
       scarfWavePhase = (scarfWavePhase + clampedDt * 5.2) % (math.pi * 200);
-      _updateSnowParticles(clampedDt, baseVz: isInMenu ? 10.0 : 3.0);
+      _updateSnowParticles(clampedDt, baseVz: isInMenu ? 12.0 : 3.0);
       _updateCallouts(clampedDt);
       notifyListeners();
       return;
@@ -450,27 +465,59 @@ class SkiGameEngine extends ChangeNotifier {
     if (_speedBoostTimer > 0) {
       _speedBoostTimer = math.max(0.0, _speedBoostTimer - clampedDt);
     }
+    if (snowballCrashTimer > 0) {
+      final double prevCrash = snowballCrashTimer;
+      snowballCrashTimer = math.max(0.0, snowballCrashTimer - clampedDt);
+      // 3 full 360° revolutions over `snowballCrashDuration` (1.15s)
+      snowballRotationRadians +=
+          (math.pi * 6.0 / snowballCrashDuration) * clampedDt;
+      if (snowParticles.length < 145) {
+        snowParticles.add(
+          SkiSnowParticle3D(
+            x: playerWorldX + (math.sin(snowballRotationRadians * 2.3) * 0.75),
+            y: 0.45 + (snowballCrashProgress * 0.35),
+            z: playerZ - 0.5,
+            vx: math.cos(snowballRotationRadians * 1.9) * 3.6,
+            vy: 2.8,
+            vz: 1.5,
+            size: 4.8,
+            life: 0.44,
+            maxLife: 0.44,
+            color: Colors.white,
+            isPowderSpray: true,
+          ),
+        );
+      }
+      if (prevCrash > 0.0 && snowballCrashTimer <= 0.0) {
+        _spawnPowderBurst(count: 14, upwardVy: 5.0);
+      }
+    }
 
-    // 1. Downhill Speed Physics
+    // 1. High-Gradient Downhill Speed Physics (`24°`, `34°`, `45°`)
     final double tiltAbs = effectiveTiltX.abs();
     final double editionMaxKmh =
         _selectedTrack.maxSpeedKmh * _selectedEdition.glideBonusMultiplier;
-    final double carveDragFactor = 1.0 - tiltAbs * 0.16;
+    final double carveDragFactor = 1.0 - tiltAbs * 0.14;
     final double offPisteRatio =
         (playerLateralOffset.abs() / _selectedTrack.trackHalfWidthMeters);
-    final double powderDragFactor = offPisteRatio > 0.96 ? 0.78 : 1.0;
-    final double boostBonusKmh = _speedBoostTimer > 0 ? 14.0 : 0.0;
+    final double powderDragFactor = offPisteRatio > 0.96 ? 0.80 : 1.0;
+    final double crashDragFactor = snowballCrashTimer > 0 ? 0.78 : 1.0;
+    final double boostBonusKmh = _speedBoostTimer > 0 ? 18.0 : 0.0;
+    final double crestPlungeBonus =
+        math.max(0.0, -math.cos(playerZ * 0.036)) * 8.5;
 
     final double targetKmh = ((_selectedTrack.baseSpeedKmh +
                     (_selectedTrack.maxSpeedKmh - _selectedTrack.baseSpeedKmh) *
-                        0.72) *
+                        0.78 +
+                    crestPlungeBonus) *
                 _selectedEdition.glideBonusMultiplier *
                 carveDragFactor *
-                powderDragFactor +
+                powderDragFactor *
+                crashDragFactor +
             boostBonusKmh)
-        .clamp(_selectedTrack.baseSpeedKmh * 0.65, editionMaxKmh + 12.0);
+        .clamp(_selectedTrack.baseSpeedKmh * 0.65, editionMaxKmh + 16.0);
 
-    final double accelRate = speedKmh < targetKmh ? 1.85 : 2.9;
+    final double accelRate = speedKmh < targetKmh ? 2.25 : 3.0;
     speedKmh +=
         (targetKmh - speedKmh) * (1.0 - math.exp(-clampedDt * accelRate));
 
@@ -481,13 +528,13 @@ class SkiGameEngine extends ChangeNotifier {
     // 2. Lateral Carving Kinematics
     final double prevVx = playerVx;
     final double targetVx = effectiveTiltX *
-        (14.0 + vz * 0.36) *
+        (15.0 + vz * 0.38) *
         _selectedEdition.carvingMultiplier;
     final double lateralControlFactor = playerY > 0.25 ? 0.55 : 1.0;
     playerVx += (targetVx - playerVx) *
-        (1.0 - math.exp(-clampedDt * 11.5 * lateralControlFactor));
+        (1.0 - math.exp(-clampedDt * 12.0 * lateralControlFactor));
 
-    final double maxLat = _selectedTrack.trackHalfWidthMeters * 1.18;
+    final double maxLat = _selectedTrack.trackHalfWidthMeters * 1.38;
     playerLateralOffset =
         (playerLateralOffset + playerVx * clampedDt).clamp(-maxLat, maxLat);
 
@@ -652,25 +699,23 @@ class SkiGameEngine extends ChangeNotifier {
       }
     }
 
-    // 8. On-Piste Pine Tree Elastic Stumble (Non-Lethal Cartoon Rebound)
-    if (_stumbleCooldown <= 0.0 && playerY < 1.35) {
+    // 8. Pine Tree Snowball Crash (`alpinePineTree` & `giantSnowPine`, on-piste OR border)
+    if (_stumbleCooldown <= 0.0 &&
+        snowballCrashTimer <= 0.0 &&
+        playerY < 1.55) {
       for (int i = 0; i < worldProps.length; i++) {
         final SkiWorldProp3D prop = worldProps[i];
-        if (!prop.isOnPiste) continue;
-        if ((prop.z - playerZ).abs() > 1.45) continue;
+        if (prop.kind != SkiPropKind.alpinePineTree &&
+            prop.kind != SkiPropKind.giantSnowPine) {
+          continue;
+        }
+        final bool sweptZ = prevZ <= prop.z && playerZ >= prop.z;
+        if (!sweptZ && (prop.z - playerZ).abs() > 1.65) continue;
         final double dx = wx - prop.x;
-        if (dx.abs() < prop.hitRadius) {
-          _stumbleTimer = 0.36;
-          _stumbleCooldown = 0.95;
-          slalomCombo = 0;
-          speedKmh = math.max(_selectedTrack.baseSpeedKmh * 0.72, speedKmh * 0.76);
-          final double pushDir = dx >= 0 ? 1.0 : -1.0;
-          playerVx = pushDir * 8.5;
-          playerLateralOffset = (playerLateralOffset + pushDir * 0.85)
-              .clamp(-maxLat, maxLat);
-          _spawnPowderBurst(count: 12, upwardVy: 4.4);
-          _addCallout('OUPS SAPIN !', const Color(0xFFFF8A80));
-          onHapticEvent?.call(SkiHapticEvent.obstacleBounce);
+        final double effectiveRadius =
+            prop.hitRadius * (0.85 + prop.scale * 0.20);
+        if (dx.abs() < effectiveRadius) {
+          _triggerSnowballCrash(dx: dx, maxLat: maxLat);
           break;
         }
       }
@@ -690,6 +735,35 @@ class SkiGameEngine extends ChangeNotifier {
       _completeRunAtChalet();
     }
 
+    notifyListeners();
+  }
+
+  void _triggerSnowballCrash({required double dx, required double maxLat}) {
+    snowballCrashTimer = snowballCrashDuration;
+    snowballRotationRadians = 0.0;
+    _stumbleCooldown = 1.65;
+    animState = VivienneSkiAnimState.snowballCrash;
+    slalomCombo = 0;
+    speedKmh =
+        math.max(_selectedTrack.baseSpeedKmh * 0.68, speedKmh * 0.74);
+    final double pushDir = dx >= 0 ? 1.0 : -1.0;
+    playerVx = pushDir * 7.2;
+    playerLateralOffset =
+        (playerLateralOffset + pushDir * 0.85).clamp(-maxLat, maxLat);
+    _spawnPowderBurst(count: 26, upwardVy: 6.5, includePineNeedles: true);
+    _addCallout('BOUM ! BOULE DE NEIGE !', const Color(0xFFFF5252));
+    onHapticEvent?.call(SkiHapticEvent.obstacleBounce);
+  }
+
+  /// Convenience helper to trigger the 3D Cartoon Snowball Crash in automated tests & screenshots.
+  void triggerSnowballCrashForTest({double progress = 0.35}) {
+    final double clamped = progress.clamp(0.0, 0.92);
+    snowballCrashTimer = snowballCrashDuration * (1.0 - clamped);
+    snowballRotationRadians = clamped * math.pi * 6.0;
+    _stumbleCooldown = 1.65;
+    animState = VivienneSkiAnimState.snowballCrash;
+    _spawnPowderBurst(count: 26, upwardVy: 6.5, includePineNeedles: true);
+    _addCallout('BOUM ! BOULE DE NEIGE !', const Color(0xFFFF5252));
     notifyListeners();
   }
 
@@ -718,7 +792,9 @@ class SkiGameEngine extends ChangeNotifier {
   }
 
   void _updateAnimationState(double dt) {
-    if (_stumbleTimer > 0.0) {
+    if (snowballCrashTimer > 0.0) {
+      animState = VivienneSkiAnimState.snowballCrash;
+    } else if (_stumbleTimer > 0.0) {
       animState = VivienneSkiAnimState.obstacleStumble;
     } else if (playerY > 0.42 || playerVy > 1.8) {
       if (_launchStretchTimer > 0.0 && playerVy > 0.0) {
@@ -775,7 +851,7 @@ class SkiGameEngine extends ChangeNotifier {
     }
 
     // Spawn side powder plume when carving strongly on snow
-    if (skisOnSnow && effectiveTiltX.abs() > 0.25 && snowParticles.length < 96) {
+    if (skisOnSnow && effectiveTiltX.abs() > 0.25 && snowParticles.length < 115) {
       final double sideSign = effectiveTiltX > 0 ? -1.0 : 1.0;
       snowParticles.add(
         SkiSnowParticle3D(
@@ -795,22 +871,29 @@ class SkiGameEngine extends ChangeNotifier {
     }
   }
 
-  void _spawnPowderBurst({required int count, required double upwardVy}) {
+  void _spawnPowderBurst({
+    required int count,
+    required double upwardVy,
+    bool includePineNeedles = false,
+  }) {
     final double wx = playerWorldX;
-    for (int i = 0; i < count && snowParticles.length < 110; i++) {
+    for (int i = 0; i < count && snowParticles.length < 165; i++) {
       final double angle = (i / count) * math.pi * 2.0;
+      final bool isNeedle = includePineNeedles && (i % 3 == 1);
       snowParticles.add(
         SkiSnowParticle3D(
-          x: wx + math.cos(angle) * 0.5,
-          y: math.max(0.15, playerY),
-          z: playerZ + math.sin(angle) * 0.5,
-          vx: math.cos(angle) * (2.5 + (i % 3) * 1.1),
+          x: wx + math.cos(angle) * 0.55,
+          y: math.max(0.18, playerY + 0.12),
+          z: playerZ + math.sin(angle) * 0.55,
+          vx: math.cos(angle) * (2.8 + (i % 3) * 1.25),
           vy: upwardVy * (0.65 + (i % 4) * 0.14),
-          vz: math.sin(angle) * 2.0,
-          size: 4.2 + (i % 3) * 1.4,
-          life: 0.55,
-          maxLife: 0.55,
-          color: Colors.white,
+          vz: math.sin(angle) * 2.2,
+          size: isNeedle ? 3.8 : (4.4 + (i % 3) * 1.5),
+          life: isNeedle ? 0.68 : 0.58,
+          maxLife: isNeedle ? 0.68 : 0.58,
+          color: isNeedle
+              ? (i.isEven ? const Color(0xFF1B5E20) : const Color(0xFF2E7D32))
+              : Colors.white,
           isPowderSpray: true,
         ),
       );
@@ -1013,6 +1096,8 @@ class SkiGameEngine extends ChangeNotifier {
     armRaiseProgress = 0.08;
     speedyBagSwingRadians = 0.0;
     _speedyBagAngularVel = 0.0;
+    snowballCrashTimer = 0.0;
+    snowballRotationRadians = 0.0;
     _mogulSquashTimer = 0.0;
     _launchStretchTimer = 0.0;
     _landingSquashTimer = 0.0;
@@ -1092,12 +1177,114 @@ class SkiGameEngine extends ChangeNotifier {
       ),
     );
 
-    // 2. Bordering Snow-Laden 3D Pine Forest + Scenic Mid-Slope Chalets & Banner Posts
+    // 2a. Lateral `LV_NEO` 3D Banners (`SkiPropKind.lvBannerPost`) along BOTH sides of the piste every ~26m!
+    for (double bz = 22.0; bz <= length - 18.0; bz += 26.0) {
+      final double cx = trackCenterOffsetX(bz);
+      worldProps.add(
+        SkiWorldProp3D(
+          id: nextPropId++,
+          kind: SkiPropKind.lvBannerPost,
+          x: cx - (halfW + 0.9),
+          z: bz,
+          scale: 1.0,
+          variant: 0, // Left piste border
+        ),
+      );
+      worldProps.add(
+        SkiWorldProp3D(
+          id: nextPropId++,
+          kind: SkiPropKind.lvBannerPost,
+          x: cx + (halfW + 0.9),
+          z: bz,
+          scale: 1.0,
+          variant: 1, // Right piste border
+        ),
+      );
+    }
+
+    // 2b. Animated Overhead Alpine Cable Cars (`SkiPropKind.cableCarPylon`),
+    //     Waving Cartoon Snowmen (`cartoonSnowman`), Fluttering Pennants & Supporters (`flutteringPennantPost`),
+    //     Active Snow Cannons (`snowCannon`) & Illuminated Mid-Slope Chalets (`alpineChalet`)
+    int cableIdx = 0;
+    for (double cz = 116.0; cz <= length - 75.0; cz += 175.0) {
+      worldProps.add(
+        SkiWorldProp3D(
+          id: nextPropId++,
+          kind: SkiPropKind.cableCarPylon,
+          x: trackCenterOffsetX(cz),
+          z: cz,
+          scale: 1.0,
+          variant: cableIdx++,
+        ),
+      );
+    }
+
+    int snowmanIdx = 0;
+    for (double sz = 36.0; sz <= length - 40.0; sz += 82.0) {
+      final double side = snowmanIdx.isEven ? -1.0 : 1.0;
+      worldProps.add(
+        SkiWorldProp3D(
+          id: nextPropId++,
+          kind: SkiPropKind.cartoonSnowman,
+          x: trackCenterOffsetX(sz) + side * (halfW + 2.65),
+          z: sz,
+          scale: 1.05,
+          variant: snowmanIdx++,
+        ),
+      );
+    }
+
+    int pennantIdx = 0;
+    for (double pz = 30.0; pz <= length - 32.0; pz += 64.0) {
+      final double side = pennantIdx.isOdd ? -1.0 : 1.0;
+      worldProps.add(
+        SkiWorldProp3D(
+          id: nextPropId++,
+          kind: SkiPropKind.flutteringPennantPost,
+          x: trackCenterOffsetX(pz) + side * (halfW + 2.45),
+          z: pz,
+          scale: 1.0,
+          variant: pennantIdx++,
+        ),
+      );
+    }
+
+    int cannonIdx = 0;
+    for (double kz = 58.0; kz <= length - 50.0; kz += 108.0) {
+      final double side = cannonIdx.isEven ? 1.0 : -1.0;
+      worldProps.add(
+        SkiWorldProp3D(
+          id: nextPropId++,
+          kind: SkiPropKind.snowCannon,
+          x: trackCenterOffsetX(kz) + side * (halfW + 3.05),
+          z: kz,
+          scale: 1.0,
+          variant: cannonIdx++, // even -> right side aiming left, odd -> left side aiming right
+        ),
+      );
+    }
+
+    int midChaletIdx = 0;
+    for (double hz = 148.0; hz <= length - 120.0; hz += 210.0) {
+      final double side = midChaletIdx.isEven ? 1.0 : -1.0;
+      worldProps.add(
+        SkiWorldProp3D(
+          id: nextPropId++,
+          kind: SkiPropKind.alpineChalet,
+          x: trackCenterOffsetX(hz) + side * (halfW + 10.5),
+          z: hz,
+          scale: 1.18,
+          variant: midChaletIdx++,
+        ),
+      );
+    }
+
+    // 2c. Bordering Snow-Laden 3D Pine Forest (collidable off-piste for Snowball Crash!)
     final double borderStep = (length - 30.0) / track.pineTreeCount;
     for (int i = 0; i < track.pineTreeCount; i++) {
       final double zLeft = 18.0 + i * borderStep;
       final double cLeft = trackCenterOffsetX(zLeft);
-      final double leftMargin = halfW + 2.2 + rng.nextDouble() * 9.5;
+      final double leftMargin = halfW + 1.85 + rng.nextDouble() * 9.2;
       worldProps.add(
         SkiWorldProp3D(
           id: nextPropId++,
@@ -1109,12 +1296,13 @@ class SkiGameEngine extends ChangeNotifier {
           scale: 0.88 + rng.nextDouble() * 0.52,
           variant: i % 3,
           snowLoad: 0.85 + rng.nextDouble() * 0.30,
+          hitRadius: 1.35,
         ),
       );
 
       final double zRight = zLeft + borderStep * 0.48;
       final double cRight = trackCenterOffsetX(zRight);
-      final double rightMargin = halfW + 2.2 + rng.nextDouble() * 9.5;
+      final double rightMargin = halfW + 1.85 + rng.nextDouble() * 9.2;
       final SkiPropKind rightKind =
           (track == SkiTrackId.blackVendomePeaks && i % 5 == 2)
               ? SkiPropKind.crystalIceRock
@@ -1130,6 +1318,7 @@ class SkiGameEngine extends ChangeNotifier {
           scale: 0.90 + rng.nextDouble() * 0.50,
           variant: (i + 1) % 3,
           snowLoad: 0.85 + rng.nextDouble() * 0.30,
+          hitRadius: 1.35,
         ),
       );
     }
@@ -1155,8 +1344,8 @@ class SkiGameEngine extends ChangeNotifier {
           z: rz,
           width: isMega ? 6.2 : 5.6,
           length: isMega ? 10.8 : 9.4,
-          heightMeters: isMega ? 2.05 : 1.62,
-          boostVy: isMega ? 13.8 : 11.8,
+          heightMeters: isMega ? 2.15 : 1.72,
+          boostVy: isMega ? 14.4 : 12.4,
           label: isMega ? 'BIG AIR VENDÔME' : 'TREMPLIN BLOSSOM',
         ),
       );
@@ -1186,16 +1375,16 @@ class SkiGameEngine extends ChangeNotifier {
           radiusX: 2.6 + (i % 2) * 0.35,
           radiusZ: 4.0 + (i % 3) * 0.45,
           heightMeters: track == SkiTrackId.greenBlossomValley
-              ? 0.72
-              : (track == SkiTrackId.blueAsnieresForest ? 0.90 : 1.08),
+              ? 0.76
+              : (track == SkiTrackId.blueAsnieresForest ? 0.94 : 1.12),
         ),
       );
     }
 
     // 5. On-Piste Pine Tree Islands (Fairly spaced away from ramps & start/finish)
     final int islandCount = track == SkiTrackId.greenBlossomValley
-        ? 8
-        : (track == SkiTrackId.blueAsnieresForest ? 18 : 28);
+        ? 10
+        : (track == SkiTrackId.blueAsnieresForest ? 20 : 30);
     for (int i = 0; i < islandCount; i++) {
       final double tz = 135.0 + ((length - 210.0) * (i + 0.5) / islandCount);
       bool nearRamp = false;
@@ -1213,12 +1402,14 @@ class SkiGameEngine extends ChangeNotifier {
       worldProps.add(
         SkiWorldProp3D(
           id: nextPropId++,
-          kind: SkiPropKind.alpinePineTree,
+          kind: i % 5 == 0
+              ? SkiPropKind.giantSnowPine
+              : SkiPropKind.alpinePineTree,
           x: cx + offset,
           z: tz,
-          scale: 0.85 + rng.nextDouble() * 0.25,
+          scale: 0.88 + rng.nextDouble() * 0.28,
           variant: i % 3,
-          hitRadius: 1.15,
+          hitRadius: 1.30,
           isOnPiste: true,
         ),
       );
@@ -1296,9 +1487,9 @@ class SkiGameEngine extends ChangeNotifier {
           playerName: 'Vivienne Atelier',
           trackId: SkiTrackId.greenBlossomValley,
           edition: VivienneSkiEdition.speedyV03,
-          score: 5480,
-          timeSeconds: 56.4,
-          maxJumpMeters: 4.8,
+          score: 5680,
+          timeSeconds: 44.2,
+          maxJumpMeters: 5.1,
           blossomsCollected: 31,
           slalomPassed: 10,
           stars: 3,
@@ -1308,10 +1499,10 @@ class SkiGameEngine extends ChangeNotifier {
           playerName: 'Camille Asnières',
           trackId: SkiTrackId.greenBlossomValley,
           edition: VivienneSkiEdition.neoBlossom,
-          score: 4390,
-          timeSeconds: 61.2,
-          maxJumpMeters: 4.2,
-          blossomsCollected: 26,
+          score: 4590,
+          timeSeconds: 47.8,
+          maxJumpMeters: 4.5,
+          blossomsCollected: 27,
           slalomPassed: 8,
           stars: 3,
         ),
@@ -1319,24 +1510,24 @@ class SkiGameEngine extends ChangeNotifier {
           id: 'seed_green_3',
           playerName: 'Louis Chamonix',
           trackId: SkiTrackId.greenBlossomValley,
-          edition: VivienneSkiEdition.speedyV03,
-          score: 3250,
-          timeSeconds: 66.8,
-          maxJumpMeters: 3.6,
-          blossomsCollected: 19,
+          edition: VivienneSkiEdition.wonderland,
+          score: 3450,
+          timeSeconds: 51.6,
+          maxJumpMeters: 3.9,
+          blossomsCollected: 20,
           slalomPassed: 7,
           stars: 2,
         ),
         // Piste Bleue — Forêt des Sapins d'Asnières
         SkiHighscoreEntry(
           id: 'seed_blue_1',
-          playerName: 'Vivienne Blossom',
+          playerName: 'Vivienne Wonderland',
           trackId: SkiTrackId.blueAsnieresForest,
-          edition: VivienneSkiEdition.neoBlossom,
-          score: 8620,
-          timeSeconds: 71.5,
-          maxJumpMeters: 5.9,
-          blossomsCollected: 44,
+          edition: VivienneSkiEdition.wonderland,
+          score: 8940,
+          timeSeconds: 54.5,
+          maxJumpMeters: 6.2,
+          blossomsCollected: 45,
           slalomPassed: 13,
           stars: 3,
         ),
@@ -1344,11 +1535,11 @@ class SkiGameEngine extends ChangeNotifier {
           id: 'seed_blue_2',
           playerName: 'Gaston Courchevel',
           trackId: SkiTrackId.blueAsnieresForest,
-          edition: VivienneSkiEdition.malleImperialeOr,
-          score: 7140,
-          timeSeconds: 76.9,
-          maxJumpMeters: 5.3,
-          blossomsCollected: 37,
+          edition: VivienneSkiEdition.giantDenim,
+          score: 7420,
+          timeSeconds: 58.9,
+          maxJumpMeters: 5.6,
+          blossomsCollected: 38,
           slalomPassed: 11,
           stars: 3,
         ),
@@ -1356,24 +1547,24 @@ class SkiGameEngine extends ChangeNotifier {
           id: 'seed_blue_3',
           playerName: 'Éléonore Megève',
           trackId: SkiTrackId.blueAsnieresForest,
-          edition: VivienneSkiEdition.speedyV03,
-          score: 5290,
-          timeSeconds: 82.4,
-          maxJumpMeters: 4.5,
-          blossomsCollected: 28,
+          edition: VivienneSkiEdition.neoBlossom,
+          score: 5490,
+          timeSeconds: 63.4,
+          maxJumpMeters: 4.8,
+          blossomsCollected: 29,
           slalomPassed: 9,
           stars: 2,
         ),
         // Piste Noire Or — Cimes Étoilées Vendôme
         SkiHighscoreEntry(
           id: 'seed_black_1',
-          playerName: 'Vivienne Impériale',
+          playerName: 'Vivienne Giant Denim',
           trackId: SkiTrackId.blackVendomePeaks,
-          edition: VivienneSkiEdition.malleImperialeOr,
-          score: 14250,
-          timeSeconds: 86.2,
-          maxJumpMeters: 7.8,
-          blossomsCollected: 64,
+          edition: VivienneSkiEdition.giantDenim,
+          score: 14850,
+          timeSeconds: 64.2,
+          maxJumpMeters: 8.2,
+          blossomsCollected: 65,
           slalomPassed: 17,
           stars: 3,
         ),
@@ -1381,11 +1572,11 @@ class SkiGameEngine extends ChangeNotifier {
           id: 'seed_black_2',
           playerName: 'Céleste Zermatt',
           trackId: SkiTrackId.blackVendomePeaks,
-          edition: VivienneSkiEdition.nuitAsnieres,
-          score: 11680,
-          timeSeconds: 91.0,
-          maxJumpMeters: 7.1,
-          blossomsCollected: 55,
+          edition: VivienneSkiEdition.wonderland,
+          score: 12180,
+          timeSeconds: 68.4,
+          maxJumpMeters: 7.4,
+          blossomsCollected: 56,
           slalomPassed: 15,
           stars: 3,
         ),
@@ -1393,11 +1584,11 @@ class SkiGameEngine extends ChangeNotifier {
           id: 'seed_black_3',
           playerName: 'Henri Val-d\'Isère',
           trackId: SkiTrackId.blackVendomePeaks,
-          edition: VivienneSkiEdition.nuitAsnieres,
-          score: 8940,
-          timeSeconds: 97.3,
-          maxJumpMeters: 6.2,
-          blossomsCollected: 42,
+          edition: VivienneSkiEdition.neoBlossom,
+          score: 9240,
+          timeSeconds: 73.1,
+          maxJumpMeters: 6.5,
+          blossomsCollected: 43,
           slalomPassed: 12,
           stars: 2,
         ),

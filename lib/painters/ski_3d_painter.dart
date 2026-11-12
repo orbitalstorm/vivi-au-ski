@@ -43,21 +43,24 @@ class _ProjectedPoint3D {
 }
 
 /// High-Precision 60–120 FPS 3rd-Person Rear Perspective 3D Renderer (`Camera3D`)
-/// for `VIVI AU SKI : Descente Royale 3D` (`v1.0.0`).
+/// for `VIVI AU SKI : Descente Royale 3D` (`v1.1.0`).
 class Ski3DPainter extends CustomPainter {
   Ski3DPainter({
     required this.engine,
     this.turntableSprites = const <ui.Image?>[],
     this.poseSprites = const <VivienneBlenderPose, ui.Image>{},
+    this.lvNeoBannerImage,
   }) : super(repaint: engine);
 
   final SkiGameEngine engine;
   final List<ui.Image?> turntableSprites;
   final Map<VivienneBlenderPose, ui.Image> poseSprites;
+  final ui.Image? lvNeoBannerImage;
 
   static const Color _kOutline = Color(0xFF2B1105);
+  static const Color _kLvNeoCobalt = Color(0xFF1638E8);
   static const double _kZNear = 6.2;
-  static const double _kZFar = 220.0;
+  static const double _kZFar = 225.0;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -70,32 +73,49 @@ class Ski3DPainter extends CustomPainter {
     final double speedNorm =
         ((engine.speedKmh - track.baseSpeedKmh) /
                 math.max(1.0, track.maxSpeedKmh - track.baseSpeedKmh))
-            .clamp(0.0, 1.2);
+            .clamp(0.0, 1.3);
 
-    // Camera3D Parameters (3rd-person rear perspective behind Vivienne)
-    final double camDistBack =
-        11.8 + speedNorm * 1.4 + (engine.playerY * 0.18).clamp(0.0, 1.6);
+    // Steep Slope Geometry (`24°`, `34°`, `45°`) & High-Speed Dynamic FOV
+    final double slopeRad = track.slopeDegrees * math.pi / 180.0;
+    final double slopeTan = math.tan(slopeRad);
+    final double steepFactor = ((slopeTan - 0.445) / 0.555).clamp(0.0, 1.0);
+
+    final double camDistBack = 11.4 +
+        speedNorm * 1.65 +
+        steepFactor * 0.85 +
+        (engine.playerY * 0.18).clamp(0.0, 1.6);
     final double camZ = engine.playerZ - camDistBack;
     final double camWorldX = engine.trackCenterOffsetX(engine.playerZ) +
         engine.playerLateralOffset * 0.70;
-    final double camHeight = 14.6 + (engine.playerY * 0.30).clamp(0.0, 2.8);
-    final double focal = size.width * 0.90;
-    final double horizonY =
-        size.height * (0.275 - speedNorm * 0.015 + engine.playerY * 0.004)
-            .clamp(0.22, 0.33);
+    final double camHeight = 14.8 +
+        steepFactor * 2.4 +
+        (engine.playerY * 0.30).clamp(0.0, 2.8);
+    final double focal =
+        size.width * (0.87 - speedNorm * 0.065 - steepFactor * 0.045);
+    final double crestPitchShift =
+        math.cos(engine.playerZ * 0.036) * 0.008 * (0.6 + steepFactor * 0.5);
+    final double horizonY = size.height *
+        (0.252 -
+                steepFactor * 0.028 -
+                speedNorm * 0.016 +
+                crestPitchShift +
+                engine.playerY * 0.004)
+            .clamp(0.185, 0.30);
     final double playerReliefRef = engine.relativeReliefAtZ(engine.playerZ);
 
     // Subtle camera roll synchronized with carving lean
-    final double camRoll = -engine.playerRollRadians * 0.15;
+    final double camRoll = -engine.playerRollRadians * 0.16;
 
     _ProjectedPoint3D project(double worldX, double yAboveSnow, double worldZ) {
       final double zRel = math.max(_kZNear * 0.65, worldZ - camZ);
       final double s = focal / zRel;
       final double reliefDelta =
           engine.relativeReliefAtZ(worldZ) - playerReliefRef;
+      // Plunging downhill drop scaled by real track `slopeDegrees` (`24°..45°`)
+      final double slopeDrop = (worldZ - engine.playerZ) * slopeTan * 0.062;
       final double sx = size.width * 0.5 + (worldX - camWorldX) * s;
       final double sy =
-          horizonY + (camHeight - yAboveSnow - reliefDelta) * s;
+          horizonY + (camHeight - yAboveSnow - reliefDelta + slopeDrop) * s;
       return _ProjectedPoint3D(x: sx, y: sy, scale: s, zRel: zRel);
     }
 
@@ -107,24 +127,25 @@ class Ski3DPainter extends CustomPainter {
       canvas.translate(-size.width * 0.5, -horizonY);
     }
 
-    // 1. Sky Dome, Sun / Aurora Borealis & Parallax 3D Alpine Peaks
+    // 1. Sky Dome, Sun / Aurora Borealis, LV Blossom Hot Air Balloons & Parallax Alpine Peaks
     _paintAlpineSkyAndMountains(canvas, size, track, horizonY, camWorldX);
 
-    // 2. Trapezoidal 3D Snow Slope Mesh (zFar -> zNear) & Dual Persistent Ski Marks
+    // 2. Trapezoidal 3D Snow Slope Mesh (`5.0 m` corduroy bands) & Dual Persistent Ski Marks
     _paintSnowSlopeMesh3D(canvas, size, track, camZ, horizonY, project);
     _paintPersistentSkiTracks3D(canvas, track, camZ, project);
 
     // 3. Strict Painter's Algorithm Z-Sort (zFar -> zNear) of all 3D World Entities
     final List<_DepthRenderItem> items = <_DepthRenderItem>[];
-    final double zMinVisible = camZ + _kZNear * 0.85;
+    final double zMinVisible = camZ + _kZNear * 0.75;
     final double zMaxVisible = camZ + _kZFar;
 
     for (int i = 0; i < engine.worldProps.length; i++) {
-      final double z = engine.worldProps[i].z;
-      if (z >= zMinVisible && z <= zMaxVisible) {
+      final SkiWorldProp3D prop = engine.worldProps[i];
+      final double margin = prop.kind == SkiPropKind.lvBannerPost ? 4.5 : 0.0;
+      if (prop.z + margin >= zMinVisible && prop.z - margin <= zMaxVisible) {
         items.add(
           _DepthRenderItem(
-            zWorld: z,
+            zWorld: prop.z,
             kind: _DepthActorKind.worldProp,
             index: i,
           ),
@@ -208,6 +229,7 @@ class Ski3DPainter extends CustomPainter {
           _paintWorldProp3D(
             canvas,
             track,
+            camZ,
             engine.worldProps[item.index],
             project,
           );
@@ -228,10 +250,68 @@ class Ski3DPainter extends CustomPainter {
 
     canvas.restore(); // End camera roll
 
-    // 4. Screen-space floating score callouts
+    // 4. Radial High-Speed Wind Lines ("filets de vent alpin") along screen edges
+    _paintHighSpeedWindLines(canvas, size, track, horizonY, speedNorm);
+
+    // 5. Screen-space floating score callouts
     _paintFloatingCallouts(canvas, size);
 
     canvas.restore();
+  }
+
+  void _paintHighSpeedWindLines(
+    Canvas canvas,
+    Size size,
+    SkiTrackId track,
+    double horizonY,
+    double speedNorm,
+  ) {
+    if (engine.isInMenu || engine.speedKmh < 54.0) return;
+
+    final double intensity =
+        ((engine.speedKmh - 54.0) / 85.0).clamp(0.12, 1.0);
+    final Offset vanish = Offset(size.width * 0.5, horizonY + 26.0);
+    final double maxRadius = size.height * 0.78;
+    const int rayCount = 18;
+
+    for (int i = 0; i < rayCount; i++) {
+      final bool leftSide = i.isEven;
+      final int sideIdx = i ~/ 2;
+      // Spread rays across the left and right outer fans so Vivienne stays clear in the center
+      final double fanFrac = (sideIdx + 0.35) / (rayCount * 0.5);
+      final double baseAngle = leftSide
+          ? (math.pi * (0.64 + fanFrac * 0.56))
+          : (math.pi * (0.36 - fanFrac * 0.56));
+      final Offset dir = Offset(math.cos(baseAngle), math.sin(baseAngle));
+
+      final double cycle =
+          (engine.ambientTime * (2.6 + intensity * 3.4) + i * 0.37) % 1.0;
+      final double rStart = maxRadius * (0.28 + cycle * 0.52);
+      final double streakLen = (28.0 + intensity * 68.0) * (0.65 + cycle * 0.55);
+      final Offset p0 = vanish + dir * rStart;
+      final Offset p1 = vanish + dir * (rStart + streakLen);
+
+      final double alpha =
+          (math.sin(cycle * math.pi) * intensity * 0.52).clamp(0.0, 0.58);
+      if (alpha <= 0.02) continue;
+
+      final Color windColor = i % 3 == 0
+          ? const Color(0xFFB3E5FC).withValues(alpha: alpha)
+          : Colors.white.withValues(alpha: alpha);
+
+      canvas.drawLine(
+        p0,
+        p1,
+        Paint()
+          ..shader = ui.Gradient.linear(
+            p0,
+            p1,
+            <Color>[windColor.withValues(alpha: 0.0), windColor],
+          )
+          ..strokeWidth = 1.4 + intensity * 1.6
+          ..strokeCap = StrokeCap.round,
+      );
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -346,6 +426,137 @@ class Ski3DPainter extends CustomPainter {
       snowCapColor: track.snowBrightColor,
       seedShift: 4,
     );
+
+    // Floating LV Blossom Hot Air Balloons in Alpine Sky Parallax
+    _paintParallaxHotAirBalloons(canvas, size, horizonY, camWorldX);
+  }
+
+  void _paintParallaxHotAirBalloons(
+    Canvas canvas,
+    Size size,
+    double horizonY,
+    double camWorldX,
+  ) {
+    final List<(double, double, double, Color, Color)> specs =
+        <(double, double, double, Color, Color)>[
+      (0.22, 0.56, 17.5, _kLvNeoCobalt, const Color(0xFFFFD700)),
+      (0.82, 0.64, 13.5, const Color(0xFFE31C58), const Color(0xFFF3B7C3)),
+    ];
+
+    for (int i = 0; i < specs.length; i++) {
+      final (
+        double xFrac,
+        double yFrac,
+        double radius,
+        Color primary,
+        Color accent,
+      ) = specs[i];
+      final double bob =
+          math.sin(engine.ambientTime * 1.45 + i * 2.1) * 4.5;
+      final double drift =
+          math.cos(engine.ambientTime * 0.65 + i * 1.4) * 5.0;
+      final Offset c = Offset(
+        size.width * xFrac - camWorldX * (1.8 + i * 0.7) + drift,
+        horizonY * yFrac + bob,
+      );
+
+      // Gondola suspension cords & wicker basket
+      final Rect basket = Rect.fromCenter(
+        center: Offset(c.dx, c.dy + radius * 1.45),
+        width: radius * 0.52,
+        height: radius * 0.36,
+      );
+      final Paint cordPaint = Paint()
+        ..color = _kOutline
+        ..strokeWidth = 1.1;
+      canvas.drawLine(
+        Offset(c.dx - radius * 0.34, c.dy + radius * 0.88),
+        Offset(basket.left + 1.5, basket.top),
+        cordPaint,
+      );
+      canvas.drawLine(
+        Offset(c.dx + radius * 0.34, c.dy + radius * 0.88),
+        Offset(basket.right - 1.5, basket.top),
+        cordPaint,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(basket, const Radius.circular(2.5)),
+        Paint()..color = const Color(0xFF8D6E63),
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(basket, const Radius.circular(2.5)),
+        Paint()
+          ..color = _kOutline
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2,
+      );
+
+      // Teardrop 3D Hot Air Balloon Envelope
+      final Path env = Path()
+        ..moveTo(c.dx, c.dy - radius)
+        ..cubicTo(
+          c.dx + radius * 1.18,
+          c.dy - radius * 0.95,
+          c.dx + radius * 1.05,
+          c.dy + radius * 0.35,
+          c.dx + radius * 0.36,
+          c.dy + radius * 0.98,
+        )
+        ..lineTo(c.dx - radius * 0.36, c.dy + radius * 0.98)
+        ..cubicTo(
+          c.dx - radius * 1.05,
+          c.dy + radius * 0.35,
+          c.dx - radius * 1.18,
+          c.dy - radius * 0.95,
+          c.dx,
+          c.dy - radius,
+        )
+        ..close();
+
+      canvas.drawPath(
+        env,
+        Paint()
+          ..shader = ui.Gradient.radial(
+            c + Offset(-radius * 0.28, -radius * 0.32),
+            radius * 1.45,
+            <Color>[Colors.white, accent, primary],
+            const <double>[0.0, 0.32, 1.0],
+          ),
+      );
+      // Center vertical Haute Couture stripe + 4-petal Blossom star
+      canvas.save();
+      canvas.clipPath(env);
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: c,
+          width: radius * 0.85,
+          height: radius * 2.1,
+        ),
+        Paint()..color = Colors.white.withValues(alpha: 0.88),
+      );
+      for (int p = 0; p < 4; p++) {
+        final double a = p * math.pi * 0.5;
+        canvas.drawCircle(
+          c + Offset(math.cos(a) * radius * 0.18, math.sin(a) * radius * 0.18 - radius * 0.10),
+          radius * 0.14,
+          Paint()..color = primary,
+        );
+      }
+      canvas.drawCircle(
+        c + Offset(0, -radius * 0.10),
+        radius * 0.08,
+        Paint()..color = const Color(0xFFFFD700),
+      );
+      canvas.restore();
+
+      canvas.drawPath(
+        env,
+        Paint()
+          ..color = _kOutline
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+    }
   }
 
   void _paintMountainRange(
@@ -390,7 +601,7 @@ class Ski3DPainter extends CustomPainter {
   }
 
   // ---------------------------------------------------------------------------
-  // 2. Trapezoidal 3D Snow Slope Mesh & Persistent Dual Ski Marks
+  // 2. Trapezoidal 3D Snow Slope Mesh (`5.0 m` Corduroy) & Dual Ski Marks
   // ---------------------------------------------------------------------------
 
   void _paintSnowSlopeMesh3D(
@@ -418,8 +629,8 @@ class Ski3DPainter extends CustomPainter {
         ),
     );
 
-    // Render 54 perspective trapezoidal snow bands from zFar -> zNear
-    const int sliceCount = 54;
+    // Render 68 perspective trapezoidal snow bands from zFar -> zNear (`5.0 m` grooming!)
+    const int sliceCount = 68;
     final double halfW = track.trackHalfWidthMeters;
 
     double prevZ = camZ + _kZFar;
@@ -443,12 +654,13 @@ class Ski3DPainter extends CustomPainter {
       final _ProjectedPoint3D currOuterR =
           project(currCx + halfW * 3.2, 0.5, currZ);
 
-      final int worldBand = (currZ / 7.5).floor();
+      // Tighter `5.0 m` groomed snow bands for high-velocity downhill rush!
+      final int worldBand = (currZ / 5.0).floor();
       final bool altBand = worldBand.isEven;
 
       // Off-piste powder banks (Left & Right shoulders with alpine blue shadows)
       final Color powderColor = altBand
-          ? Color.lerp(track.snowMidColor, track.snowShadowColor, 0.38)!
+          ? Color.lerp(track.snowMidColor, track.snowShadowColor, 0.36)!
           : Color.lerp(track.snowMidColor, track.snowShadowColor, 0.52)!;
       final Path leftBank = Path()
         ..moveTo(prevOuterL.x, prevOuterL.y)
@@ -469,7 +681,7 @@ class Ski3DPainter extends CustomPainter {
       // Groomed corduroy ski piste corridor
       final Color pisteColor = altBand
           ? track.snowBrightColor
-          : Color.lerp(track.snowBrightColor, track.snowShadowColor, 0.16)!;
+          : Color.lerp(track.snowBrightColor, track.snowShadowColor, 0.19)!;
       final Path pisteQuad = Path()
         ..moveTo(prevLeft.x, prevLeft.y)
         ..lineTo(prevRight.x, prevRight.y)
@@ -478,12 +690,30 @@ class Ski3DPainter extends CustomPainter {
         ..close();
       canvas.drawPath(pisteQuad, Paint()..color = pisteColor);
 
-      // Crisp piste border snow-cushion lines
+      // Longitudinal corduroy grooming grooves rushing beneath skis
+      if (altBand && currLeft.scale > 2.2) {
+        final Paint cordPaint = Paint()
+          ..color = track.snowShadowColor.withValues(alpha: 0.28)
+          ..strokeWidth = (currLeft.scale * 0.05).clamp(0.8, 1.8);
+        for (final double frac in const <double>[0.25, 0.50, 0.75]) {
+          final double px0 =
+              prevLeft.x + (prevRight.x - prevLeft.x) * frac;
+          final double py0 =
+              prevLeft.y + (prevRight.y - prevLeft.y) * frac;
+          final double px1 =
+              currLeft.x + (currRight.x - currLeft.x) * frac;
+          final double py1 =
+              currLeft.y + (currRight.y - currLeft.y) * frac;
+          canvas.drawLine(Offset(px0, py0), Offset(px1, py1), cordPaint);
+        }
+      }
+
+      // Crisp piste border snow-cushion lines (`LV_NEO` cobalt & track badge accents)
       final Paint edgePaint = Paint()
         ..color = altBand
-            ? track.badgeColor.withValues(alpha: 0.55)
-            : track.snowShadowColor.withValues(alpha: 0.75)
-        ..strokeWidth = math.max(1.2, currLeft.scale * 0.14)
+            ? _kLvNeoCobalt.withValues(alpha: 0.65)
+            : track.badgeColor.withValues(alpha: 0.72)
+        ..strokeWidth = math.max(1.4, currLeft.scale * 0.16)
         ..strokeCap = StrokeCap.round;
       canvas.drawLine(
         Offset(prevLeft.x, prevLeft.y),
@@ -542,6 +772,7 @@ class Ski3DPainter extends CustomPainter {
   void _paintWorldProp3D(
     Canvas canvas,
     SkiTrackId track,
+    double camZ,
     SkiWorldProp3D prop,
     _ProjectedPoint3D Function(double x, double y, double z) project,
   ) {
@@ -560,7 +791,15 @@ class Ski3DPainter extends CustomPainter {
       case SkiPropKind.alpineChalet:
         _paintAlpineChalet3D(canvas, prop, project);
       case SkiPropKind.lvBannerPost:
-        break;
+        _paintLvNeoBanner3D(canvas, track, camZ, prop, project);
+      case SkiPropKind.cableCarPylon:
+        _paintCableCarSystem3D(canvas, track, prop, project);
+      case SkiPropKind.cartoonSnowman:
+        _paintCartoonSnowman3D(canvas, prop, project);
+      case SkiPropKind.flutteringPennantPost:
+        _paintFlutteringPennantAndSupporter3D(canvas, prop, project);
+      case SkiPropKind.snowCannon:
+        _paintSnowCannon3D(canvas, track, prop, project);
       case SkiPropKind.startArch:
         _paintArch3D(canvas, prop, project, isFinish: false);
       case SkiPropKind.finishArch:
@@ -970,12 +1209,39 @@ class Ski3DPainter extends CustomPainter {
   ) {
     final _ProjectedPoint3D base = project(prop.x, 0.0, prop.z);
     final double s = base.scale * prop.scale;
-    if (s < 0.9) return;
+    if (s < 0.85) return;
 
     final double w = 6.8 * s;
     final double h = 4.6 * s;
-    final Rect walls =
-        Rect.fromCenter(center: Offset(base.x, base.y - h * 0.42), width: w, height: h * 0.84);
+
+    // Stone chimney + warm rising cartoon smoke rings
+    final Rect chimney = Rect.fromCenter(
+      center: Offset(base.x + w * 0.28, base.y - h * 1.02),
+      width: w * 0.14,
+      height: h * 0.34,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(chimney, Radius.circular(s * 0.08)),
+      Paint()..color = const Color(0xFF5D4037),
+    );
+    for (int k = 0; k < 3; k++) {
+      final double phase = (engine.ambientTime * 0.9 + k * 0.33 + prop.id * 0.2) % 1.0;
+      final Offset puff = Offset(
+        chimney.center.dx + math.sin(phase * 5.0 + k) * s * 0.35,
+        chimney.top - phase * s * 1.65,
+      );
+      canvas.drawCircle(
+        puff,
+        (s * (0.20 + phase * 0.28)).clamp(1.2, 9.0),
+        Paint()..color = Colors.white.withValues(alpha: (1.0 - phase) * 0.58),
+      );
+    }
+
+    final Rect walls = Rect.fromCenter(
+      center: Offset(base.x, base.y - h * 0.42),
+      width: w,
+      height: h * 0.84,
+    );
     canvas.drawRRect(
       RRect.fromRectAndRadius(walls, Radius.circular(s * 0.2)),
       Paint()..color = const Color(0xFF6D4C41),
@@ -992,12 +1258,19 @@ class Ski3DPainter extends CustomPainter {
     for (final double wxOff in <double>[-0.24, 0.24]) {
       final Rect win = Rect.fromCenter(
         center: Offset(base.x + w * wxOff, base.y - h * 0.44),
-        width: w * 0.20,
-        height: h * 0.26,
+        width: w * 0.22,
+        height: h * 0.28,
       );
       canvas.drawRRect(
         RRect.fromRectAndRadius(win, Radius.circular(s * 0.1)),
         Paint()..color = const Color(0xFFFFE082),
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(win, Radius.circular(s * 0.1)),
+        Paint()
+          ..color = _kOutline
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = (s * 0.06).clamp(0.8, 1.8),
       );
     }
 
@@ -1018,6 +1291,673 @@ class Ski3DPainter extends CustomPainter {
     );
   }
 
+  /// 3D Piste-Border `LV_NEO` Banner (`SkiPropKind.lvBannerPost`) stretched in perspective
+  /// along the descent between two Cobalt Blue `#1638E8` & 24K Gold `#FFD700` masts.
+  void _paintLvNeoBanner3D(
+    Canvas canvas,
+    SkiTrackId track,
+    double camZ,
+    SkiWorldProp3D prop,
+    _ProjectedPoint3D Function(double x, double y, double z) project,
+  ) {
+    final bool isLeft = prop.variant == 0;
+    final double sideSign = isLeft ? -1.0 : 1.0;
+    final double borderOffset = sideSign * (track.trackHalfWidthMeters + 0.9);
+
+    const double halfSpanZ = 3.8;
+    final double rawZ0 = prop.z - halfSpanZ;
+    final double rawZ1 = prop.z + halfSpanZ;
+    final double clipZMin = camZ + _kZNear * 0.88;
+    if (rawZ1 <= clipZMin + 0.4) return;
+
+    final double z0 = math.max(rawZ0, clipZMin);
+    final double z1 = rawZ1;
+    final double uClip0 = ((z0 - rawZ0) / (rawZ1 - rawZ0)).clamp(0.0, 0.92);
+
+    final double x0 = engine.trackCenterOffsetX(z0) + borderOffset;
+    final double x1 = engine.trackCenterOffsetX(z1) + borderOffset;
+    final _ProjectedPoint3D pTest = project(x1, 1.0, z1);
+    if (pTest.scale < 0.85) return;
+
+    const double yBannerBot = 0.42;
+    const double yBannerTop = 1.98;
+    const double yMastTop = 2.30;
+
+    // Far mast (drawn first for Z-correctness)
+    _paintLvNeoMastPost(canvas, project(x1, 0.0, z1), project(x1, yMastTop, z1));
+
+    // Subdivide banner into 8 perspective vertical strips along `z0..z1`
+    const int strips = 8;
+    final List<_ProjectedPoint3D> topPts = <_ProjectedPoint3D>[];
+    final List<_ProjectedPoint3D> botPts = <_ProjectedPoint3D>[];
+    for (int k = 0; k <= strips; k++) {
+      final double frac = k / strips;
+      final double zk = z0 + (z1 - z0) * frac;
+      final double xk = engine.trackCenterOffsetX(zk) + borderOffset;
+      final double flutter =
+          math.sin(engine.ambientTime * 4.8 + zk * 0.45) * 0.035 * math.sin(frac * math.pi);
+      topPts.add(project(xk + flutter, yBannerTop, zk));
+      botPts.add(project(xk + flutter, yBannerBot, zk));
+    }
+
+    final Path quadOutline = Path()..moveTo(topPts.first.x, topPts.first.y);
+    for (int k = 1; k <= strips; k++) {
+      quadOutline.lineTo(topPts[k].x, topPts[k].y);
+    }
+    for (int k = strips; k >= 0; k--) {
+      quadOutline.lineTo(botPts[k].x, botPts[k].y);
+    }
+    quadOutline.close();
+
+    // Crisp white luxury banner backing
+    canvas.drawPath(quadOutline, Paint()..color = Colors.white);
+
+    final ui.Image? img = lvNeoBannerImage;
+    if (img != null && topPts.first.scale > 1.25) {
+      final double imgW = img.width.toDouble();
+      final double imgH = img.height.toDouble();
+      final List<Offset> positions = <Offset>[];
+      final List<Offset> texCoords = <Offset>[];
+
+      for (int k = 0; k < strips; k++) {
+        final double f0 = uClip0 + (1.0 - uClip0) * (k / strips);
+        final double f1 = uClip0 + (1.0 - uClip0) * ((k + 1) / strips);
+        // Orient U left-to-right on screen for BOTH left and right piste banners!
+        final double u0 = (isLeft ? f0 : (1.0 - f0)) * imgW;
+        final double u1 = (isLeft ? f1 : (1.0 - f1)) * imgW;
+
+        final Offset tl = Offset(topPts[k].x, topPts[k].y);
+        final Offset tr = Offset(topPts[k + 1].x, topPts[k + 1].y);
+        final Offset br = Offset(botPts[k + 1].x, botPts[k + 1].y);
+        final Offset bl = Offset(botPts[k].x, botPts[k].y);
+
+        positions
+          ..add(tl)
+          ..add(tr)
+          ..add(br)
+          ..add(tl)
+          ..add(br)
+          ..add(bl);
+        texCoords
+          ..add(Offset(u0, 0))
+          ..add(Offset(u1, 0))
+          ..add(Offset(u1, imgH))
+          ..add(Offset(u0, 0))
+          ..add(Offset(u1, imgH))
+          ..add(Offset(u0, imgH));
+      }
+
+      final ui.Vertices vertices = ui.Vertices(
+        ui.VertexMode.triangles,
+        positions,
+        textureCoordinates: texCoords,
+      );
+      canvas.drawVertices(
+        vertices,
+        BlendMode.srcOver,
+        Paint()
+          ..shader = ui.ImageShader(
+            img,
+            TileMode.clamp,
+            TileMode.clamp,
+            Matrix4.identity().storage,
+            filterQuality: FilterQuality.medium,
+          ),
+      );
+    } else {
+      // Vector fallback identical to `LV_NEO ✦ — Tech For Luxury Experiences`
+      final Offset midLeft = Offset(
+        (topPts.first.x + botPts.first.x) * 0.5,
+        (topPts.first.y + botPts.first.y) * 0.5,
+      );
+      final Offset midRight = Offset(
+        (topPts.last.x + botPts.last.x) * 0.5,
+        (topPts.last.y + botPts.last.y) * 0.5,
+      );
+      canvas.drawLine(
+        Offset.lerp(midLeft, midRight, 0.16)!,
+        Offset.lerp(midLeft, midRight, 0.84)!,
+        Paint()
+          ..color = _kLvNeoCobalt
+          ..strokeWidth = (pTest.scale * 0.26).clamp(1.6, 8.0)
+          ..strokeCap = StrokeCap.round,
+      );
+      final Offset starPt = Offset.lerp(
+        Offset(topPts[strips ~/ 2].x, topPts[strips ~/ 2].y),
+        midRight,
+        isLeft ? 0.65 : 0.35,
+      )!;
+      canvas.drawCircle(
+        starPt,
+        (pTest.scale * 0.18).clamp(1.2, 4.8),
+        Paint()..color = _kLvNeoCobalt,
+      );
+    }
+
+    // Cobalt Blue `#1638E8` & 24K Gold `#FFD700` luxury banner trim
+    canvas.drawPath(
+      quadOutline,
+      Paint()
+        ..color = _kLvNeoCobalt
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = (topPts.first.scale * 0.11).clamp(1.1, 3.2)
+        ..strokeJoin = StrokeJoin.round,
+    );
+    canvas.drawLine(
+      Offset(topPts.first.x, topPts.first.y),
+      Offset(topPts.last.x, topPts.last.y),
+      Paint()
+        ..color = const Color(0xFFFFD700)
+        ..strokeWidth = (topPts.first.scale * 0.08).clamp(1.0, 2.5),
+    );
+
+    // Near mast (if unclipped) drawn in front!
+    if (uClip0 <= 0.02) {
+      _paintLvNeoMastPost(
+        canvas,
+        project(x0, 0.0, z0),
+        project(x0, yMastTop, z0),
+      );
+    }
+  }
+
+  void _paintLvNeoMastPost(
+    Canvas canvas,
+    _ProjectedPoint3D base,
+    _ProjectedPoint3D top,
+  ) {
+    final double postW = (base.scale * 0.16).clamp(1.4, 5.2);
+    canvas.drawLine(
+      Offset(base.x, base.y),
+      Offset(top.x, top.y),
+      Paint()
+        ..color = _kOutline
+        ..strokeWidth = postW + 1.6
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.drawLine(
+      Offset(base.x, base.y),
+      Offset(top.x, top.y),
+      Paint()
+        ..color = _kLvNeoCobalt
+        ..strokeWidth = postW
+        ..strokeCap = StrokeCap.round,
+    );
+    // 24K Gold finial sphere on top of mast
+    final double finialR = (top.scale * 0.20).clamp(1.8, 6.2);
+    canvas.drawCircle(
+      Offset(top.x, top.y),
+      finialR,
+      Paint()..color = const Color(0xFFFFD700),
+    );
+    canvas.drawCircle(
+      Offset(top.x, top.y),
+      finialR,
+      Paint()
+        ..color = _kOutline
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = (top.scale * 0.06).clamp(0.8, 1.8),
+    );
+  }
+
+  /// Animated Overhead Alpine Gondola / Cable Car System (`SkiPropKind.cableCarPylon`)
+  void _paintCableCarSystem3D(
+    Canvas canvas,
+    SkiTrackId track,
+    SkiWorldProp3D prop,
+    _ProjectedPoint3D Function(double x, double y, double z) project,
+  ) {
+    final double spanX = track.trackHalfWidthMeters + 8.5;
+    final double lx = prop.x - spanX;
+    final double rx = prop.x + spanX;
+    final _ProjectedPoint3D lBase = project(lx, 0.0, prop.z);
+    final _ProjectedPoint3D rBase = project(rx, 0.0, prop.z);
+    final _ProjectedPoint3D lTop = project(lx, 11.4, prop.z);
+    final _ProjectedPoint3D rTop = project(rx, 11.4, prop.z);
+    if (lBase.scale < 0.72) return;
+
+    final double s = lTop.scale;
+    // Steel lattice pylons on both sides
+    for (final (_ProjectedPoint3D b, _ProjectedPoint3D t)
+        in <(_ProjectedPoint3D, _ProjectedPoint3D)>[(lBase, lTop), (rBase, rTop)]) {
+      final double baseSpread = (b.scale * 0.75).clamp(2.0, 14.0);
+      final double topSpread = (t.scale * 0.28).clamp(1.2, 6.0);
+      final Paint towerPaint = Paint()
+        ..color = const Color(0xFF37474F)
+        ..strokeWidth = (b.scale * 0.14).clamp(1.3, 4.0)
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(Offset(b.x - baseSpread, b.y), Offset(t.x - topSpread, t.y), towerPaint);
+      canvas.drawLine(Offset(b.x + baseSpread, b.y), Offset(t.x + topSpread, t.y), towerPaint);
+      // Crossbar & pulley beam
+      canvas.drawLine(
+        Offset(t.x - topSpread * 2.2, t.y),
+        Offset(t.x + topSpread * 2.2, t.y),
+        Paint()
+          ..color = const Color(0xFFFFD700)
+          ..strokeWidth = (t.scale * 0.18).clamp(1.5, 4.5)
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    // Overhead catenary cables spanning high across the piste
+    final _ProjectedPoint3D midSag = project(prop.x, 10.6, prop.z);
+    final Path cablePath = Path()
+      ..moveTo(lTop.x, lTop.y)
+      ..quadraticBezierTo(midSag.x, midSag.y, rTop.x, rTop.y);
+    canvas.drawPath(
+      cablePath,
+      Paint()
+        ..color = const Color(0xFF263238)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = (s * 0.09).clamp(1.1, 2.6),
+    );
+
+    // 2 Animated Red & 24K Gold Alpine Gondola Cabins gliding smoothly in opposite directions!
+    for (int cab = 0; cab < 2; cab++) {
+      final double rawU = (engine.ambientTime * 0.14 + prop.variant * 0.37 + cab * 0.48) % 1.0;
+      final double u = cab == 0 ? rawU : (1.0 - rawU);
+      final double cabX = lx + (rx - lx) * (0.10 + u * 0.80);
+      final double sag = 4.0 * u * (1.0 - u) * 0.55;
+      final double cableY = 11.4 - sag;
+      final _ProjectedPoint3D hangerTop = project(cabX, cableY, prop.z);
+      final _ProjectedPoint3D cabCenter = project(cabX, cableY - 1.45, prop.z);
+      final double cs = cabCenter.scale;
+      if (cs < 0.8) continue;
+
+      final double sway = math.sin(engine.ambientTime * 2.8 + cab * 2.0) * 0.08;
+      canvas.save();
+      canvas.translate(hangerTop.x, hangerTop.y);
+      canvas.rotate(sway);
+
+      final double drop = (cabCenter.y - hangerTop.y).clamp(4.0, 48.0);
+      canvas.drawLine(
+        Offset.zero,
+        Offset(0, drop * 0.68),
+        Paint()
+          ..color = _kOutline
+          ..strokeWidth = (cs * 0.10).clamp(1.1, 2.8),
+      );
+
+      final Rect cabinRect = Rect.fromCenter(
+        center: Offset(0, drop),
+        width: cs * 2.25,
+        height: cs * 1.65,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(cabinRect, Radius.circular(cs * 0.36)),
+        Paint()
+          ..color = cab == 0 ? const Color(0xFFD32F2F) : _kLvNeoCobalt,
+      );
+      // Gold belt stripe
+      canvas.drawLine(
+        Offset(cabinRect.left + 1, cabinRect.center.dy + cabinRect.height * 0.14),
+        Offset(cabinRect.right - 1, cabinRect.center.dy + cabinRect.height * 0.14),
+        Paint()
+          ..color = const Color(0xFFFFD700)
+          ..strokeWidth = (cs * 0.14).clamp(1.0, 3.0),
+      );
+      // Panoramic icy glass window
+      final Rect glass = Rect.fromCenter(
+        center: Offset(0, drop - cabinRect.height * 0.12),
+        width: cabinRect.width * 0.74,
+        height: cabinRect.height * 0.44,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(glass, Radius.circular(cs * 0.18)),
+        Paint()..color = const Color(0xFFB3E5FC),
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(cabinRect, Radius.circular(cs * 0.36)),
+        Paint()
+          ..color = _kOutline
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = (cs * 0.10).clamp(1.0, 2.5),
+      );
+      canvas.restore();
+    }
+  }
+
+  /// Cheerful Waving Cartoon Snowman (`SkiPropKind.cartoonSnowman`) with LV Scarf, Carrot & Top Hat
+  void _paintCartoonSnowman3D(
+    Canvas canvas,
+    SkiWorldProp3D prop,
+    _ProjectedPoint3D Function(double x, double y, double z) project,
+  ) {
+    final _ProjectedPoint3D base = project(prop.x, 0.0, prop.z);
+    final double s = base.scale * prop.scale;
+    if (s < 1.0) return;
+
+    // Ground shadow
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(base.x, base.y + s * 0.08),
+        width: s * 1.9,
+        height: s * 0.52,
+      ),
+      Paint()..color = const Color(0xFF1A3B5C).withValues(alpha: 0.24),
+    );
+
+    final Paint outline = Paint()
+      ..color = _kOutline
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = (s * 0.09).clamp(1.0, 2.4);
+
+    final Offset bottomC = Offset(base.x, base.y - s * 0.68);
+    final Offset midC = Offset(base.x, base.y - s * 1.56);
+    final Offset headC = Offset(base.x, base.y - s * 2.28);
+
+    // Animated waving twig arms!
+    final double wave = math.sin(engine.ambientTime * 6.2 + prop.id) * 0.42;
+    final Paint twigPaint = Paint()
+      ..color = const Color(0xFF5D4037)
+      ..strokeWidth = (s * 0.10).clamp(1.2, 2.8)
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      midC + Offset(-s * 0.48, -s * 0.05),
+      midC + Offset(-s * 1.08, -s * (0.55 + wave * 0.55)),
+      twigPaint,
+    );
+    canvas.drawLine(
+      midC + Offset(s * 0.48, -s * 0.05),
+      midC + Offset(s * 1.08, -s * (0.55 - wave * 0.55)),
+      twigPaint,
+    );
+
+    // 3 plump snow spheres
+    for (final (Offset c, double r) in <(Offset, double)>[
+      (bottomC, s * 0.72),
+      (midC, s * 0.54),
+      (headC, s * 0.42),
+    ]) {
+      canvas.drawCircle(
+        c,
+        r,
+        Paint()
+          ..shader = ui.Gradient.radial(
+            c + Offset(-r * 0.25, -r * 0.25),
+            r * 1.3,
+            const <Color>[Colors.white, Color(0xFFE1F5FE)],
+          ),
+      );
+      canvas.drawCircle(c, r, outline);
+    }
+
+    // Golden buttons on tummy
+    for (final double by in <double>[-0.14, 0.14]) {
+      canvas.drawCircle(
+        midC + Offset(0, s * by),
+        (s * 0.08).clamp(1.0, 2.6),
+        Paint()..color = const Color(0xFFFFD700),
+      );
+    }
+
+    // Warm fluttering LV Scarf (alternating Cobalt `LV_NEO` and Crimson)
+    final Color scarfCol =
+        prop.variant.isEven ? _kLvNeoCobalt : const Color(0xFFD91E48);
+    final Rect scarfNeck = Rect.fromCenter(
+      center: Offset(headC.dx, headC.dy + s * 0.38),
+      width: s * 0.76,
+      height: s * 0.22,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(scarfNeck, Radius.circular(s * 0.08)),
+      Paint()..color = scarfCol,
+    );
+    canvas.drawLine(
+      Offset(headC.dx + s * 0.20, headC.dy + s * 0.42),
+      Offset(
+        headC.dx + s * (0.55 + wave * 0.35),
+        headC.dy + s * 0.88,
+      ),
+      Paint()
+        ..color = scarfCol
+        ..strokeWidth = (s * 0.18).clamp(1.4, 4.2)
+        ..strokeCap = StrokeCap.round,
+    );
+
+    // Eyes & Orange 3D Carrot Nose
+    canvas.drawCircle(
+      headC + Offset(-s * 0.14, -s * 0.08),
+      (s * 0.06).clamp(0.9, 2.2),
+      Paint()..color = _kOutline,
+    );
+    canvas.drawCircle(
+      headC + Offset(s * 0.14, -s * 0.08),
+      (s * 0.06).clamp(0.9, 2.2),
+      Paint()..color = _kOutline,
+    );
+    final Path carrot = Path()
+      ..moveTo(headC.dx, headC.dy + s * 0.02)
+      ..lineTo(headC.dx + s * 0.44, headC.dy + s * 0.08)
+      ..lineTo(headC.dx, headC.dy + s * 0.14)
+      ..close();
+    canvas.drawPath(carrot, Paint()..color = const Color(0xFFFF6D00));
+
+    // Top Hat with 24K Gold Ribbon
+    canvas.drawLine(
+      Offset(headC.dx - s * 0.46, headC.dy - s * 0.36),
+      Offset(headC.dx + s * 0.46, headC.dy - s * 0.36),
+      Paint()
+        ..color = _kOutline
+        ..strokeWidth = (s * 0.12).clamp(1.4, 3.4)
+        ..strokeCap = StrokeCap.round,
+    );
+    final Rect hatCrown = Rect.fromCenter(
+      center: Offset(headC.dx, headC.dy - s * 0.64),
+      width: s * 0.56,
+      height: s * 0.52,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(hatCrown, Radius.circular(s * 0.06)),
+      Paint()..color = const Color(0xFF2B1D14),
+    );
+    canvas.drawLine(
+      Offset(hatCrown.left, hatCrown.bottom - s * 0.08),
+      Offset(hatCrown.right, hatCrown.bottom - s * 0.08),
+      Paint()
+        ..color = const Color(0xFFFFD700)
+        ..strokeWidth = (s * 0.10).clamp(1.0, 2.6),
+    );
+  }
+
+  /// Festive Fluttering Multi-Color Pennant Mast & Cheering Supporter (`SkiPropKind.flutteringPennantPost`)
+  void _paintFlutteringPennantAndSupporter3D(
+    Canvas canvas,
+    SkiWorldProp3D prop,
+    _ProjectedPoint3D Function(double x, double y, double z) project,
+  ) {
+    final _ProjectedPoint3D base = project(prop.x, 0.0, prop.z);
+    final _ProjectedPoint3D top = project(prop.x, 4.4, prop.z);
+    final double s = base.scale;
+    if (s < 0.95) return;
+
+    final double dir = prop.x < engine.trackCenterOffsetX(prop.z) ? -1.0 : 1.0;
+
+    // Tall white/gold mast
+    canvas.drawLine(
+      Offset(base.x, base.y),
+      Offset(top.x, top.y),
+      Paint()
+        ..color = _kOutline
+        ..strokeWidth = (s * 0.15).clamp(1.5, 4.2)
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.drawLine(
+      Offset(base.x, base.y),
+      Offset(top.x, top.y),
+      Paint()
+        ..color = const Color(0xFFFFD700)
+        ..strokeWidth = (s * 0.09).clamp(1.0, 2.6)
+        ..strokeCap = StrokeCap.round,
+    );
+
+    // 3 Large Rippling Festive Pennants
+    const List<Color> colors = <Color>[
+      _kLvNeoCobalt,
+      Color(0xFFFF4081),
+      Color(0xFF00E676),
+    ];
+    for (int f = 0; f < 3; f++) {
+      final double yAnchor = top.y + (base.y - top.y) * (0.06 + f * 0.22);
+      final double wave =
+          math.sin(engine.ambientTime * 6.5 + prop.id + f * 1.4) * s * 0.22;
+      final Path flag = Path()
+        ..moveTo(top.x, yAnchor)
+        ..quadraticBezierTo(
+          top.x + dir * s * 0.95,
+          yAnchor + s * 0.12 + wave,
+          top.x + dir * s * 1.85,
+          yAnchor + s * 0.24 - wave * 0.6,
+        )
+        ..lineTo(top.x, yAnchor + s * 0.56)
+        ..close();
+      canvas.drawPath(flag, Paint()..color = colors[(prop.variant + f) % colors.length]);
+      canvas.drawPath(
+        flag,
+        Paint()
+          ..color = _kOutline
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = (s * 0.06).clamp(0.8, 1.8),
+      );
+    }
+
+    // Bouncing Cartoon Alpine Supporter cheering next to the mast!
+    final double hop =
+        math.sin(engine.ambientTime * 5.8 + prop.id).abs() * s * 0.35;
+    final Offset supBase = Offset(base.x + dir * s * 0.95, base.y - hop);
+    final Color jacketColor = prop.variant.isEven
+        ? const Color(0xFFFF6D00)
+        : const Color(0xFF00B0FF);
+
+    // Puffer jacket body
+    final RRect torso = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: supBase + Offset(0, -s * 0.68),
+        width: s * 0.72,
+        height: s * 0.88,
+      ),
+      Radius.circular(s * 0.24),
+    );
+    canvas.drawRRect(torso, Paint()..color = jacketColor);
+    canvas.drawRRect(
+      torso,
+      Paint()
+        ..color = _kOutline
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = (s * 0.07).clamp(0.9, 2.0),
+    );
+    // Raised cheering arms
+    final Paint armP = Paint()
+      ..color = jacketColor
+      ..strokeWidth = (s * 0.16).clamp(1.2, 3.6)
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      supBase + Offset(-s * 0.28, -s * 0.85),
+      supBase + Offset(-s * 0.62, -s * 1.45),
+      armP,
+    );
+    canvas.drawLine(
+      supBase + Offset(s * 0.28, -s * 0.85),
+      supBase + Offset(s * 0.62, -s * 1.45),
+      armP,
+    );
+    // Head & pom-pom beanie
+    final Offset supHead = supBase + Offset(0, -s * 1.30);
+    canvas.drawCircle(supHead, s * 0.26, Paint()..color = const Color(0xFFFFCCBC));
+    canvas.drawArc(
+      Rect.fromCircle(center: supHead, radius: s * 0.28),
+      math.pi,
+      math.pi,
+      true,
+      Paint()..color = const Color(0xFFD50000),
+    );
+    canvas.drawCircle(
+      supHead + Offset(0, -s * 0.34),
+      s * 0.11,
+      Paint()..color = Colors.white,
+    );
+  }
+
+  /// Active Yellow & Cobalt Snow Cannon (`SkiPropKind.snowCannon`) spraying snow crystals!
+  void _paintSnowCannon3D(
+    Canvas canvas,
+    SkiTrackId track,
+    SkiWorldProp3D prop,
+    _ProjectedPoint3D Function(double x, double y, double z) project,
+  ) {
+    final _ProjectedPoint3D base = project(prop.x, 0.0, prop.z);
+    final double s = base.scale;
+    if (s < 0.95) return;
+
+    // Aim inward/upward toward the piste shoulder
+    final double aimDir = prop.x > engine.trackCenterOffsetX(prop.z) ? -1.0 : 1.0;
+
+    // Tripod legs on snow mound
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(base.x, base.y),
+        width: s * 2.1,
+        height: s * 0.58,
+      ),
+      Paint()..color = Colors.white,
+    );
+    final Paint legPaint = Paint()
+      ..color = const Color(0xFF37474F)
+      ..strokeWidth = (s * 0.13).clamp(1.2, 3.4)
+      ..strokeCap = StrokeCap.round;
+    final Offset pivot = Offset(base.x, base.y - s * 0.78);
+    canvas.drawLine(pivot, Offset(base.x - s * 0.68, base.y), legPaint);
+    canvas.drawLine(pivot, Offset(base.x + s * 0.68, base.y), legPaint);
+
+    // Cannon barrel (Yellow `#FFB300` & Cobalt `#1565C0`)
+    canvas.save();
+    canvas.translate(pivot.dx, pivot.dy);
+    canvas.rotate(aimDir * -0.48);
+
+    final RRect barrel = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(aimDir * s * 0.22, -s * 0.18),
+        width: s * 1.48,
+        height: s * 0.82,
+      ),
+      Radius.circular(s * 0.28),
+    );
+    canvas.drawRRect(barrel, Paint()..color = const Color(0xFFFFB300));
+    canvas.drawRRect(
+      barrel,
+      Paint()
+        ..color = _kOutline
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = (s * 0.09).clamp(1.0, 2.4),
+    );
+    // Cobalt nozzle ring
+    final Offset nozzle = Offset(aimDir * s * 0.92, -s * 0.18);
+    canvas.drawOval(
+      Rect.fromCenter(center: nozzle, width: s * 0.34, height: s * 0.78),
+      Paint()..color = const Color(0xFF1565C0),
+    );
+    canvas.restore();
+
+    // Continuous Animated Jet Plume of Sparkling Snow Crystals!
+    final Offset jetOrigin = pivot + Offset(aimDir * s * 0.95, -s * 0.62);
+    for (int p = 0; p < 10; p++) {
+      final double u = ((engine.ambientTime * 2.4 + p * 0.10 + prop.id * 0.17) % 1.0);
+      final double spread = math.sin(p * 2.3 + engine.ambientTime * 5.0) * s * 0.55 * u;
+      final Offset crystalPt = jetOrigin +
+          Offset(
+            aimDir * u * s * 3.8,
+            -u * s * 2.35 + u * u * s * 0.85 + spread,
+          );
+      final double r = (s * (0.14 + u * 0.26)).clamp(1.2, 7.5);
+      canvas.drawCircle(
+        crystalPt,
+        r,
+        Paint()
+          ..color = Colors.white.withValues(alpha: (1.0 - u * 0.78) * 0.82),
+      );
+    }
+  }
+
   void _paintArch3D(
     Canvas canvas,
     SkiWorldProp3D prop,
@@ -1033,7 +1973,7 @@ class Ski3DPainter extends CustomPainter {
 
     final double postW = (lBase.scale * 0.65).clamp(2.5, 16.0);
     final Paint pillarPaint = Paint()
-      ..color = const Color(0xFF3A2618)
+      ..color = isFinish ? const Color(0xFF8B1E24) : _kLvNeoCobalt
       ..strokeWidth = postW
       ..strokeCap = StrokeCap.round;
 
@@ -1042,16 +1982,32 @@ class Ski3DPainter extends CustomPainter {
 
     final Rect bannerRect = Rect.fromLTRB(
       lTop.x - postW * 0.4,
-      lTop.y - lTop.scale * 1.35,
+      lTop.y - lTop.scale * 1.45,
       rTop.x + postW * 0.4,
       rTop.y + rTop.scale * 0.25,
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(bannerRect, Radius.circular(lTop.scale * 0.3)),
-      Paint()
-        ..color =
-            isFinish ? const Color(0xFF8B1E24) : const Color(0xFF2B1D14),
+      Paint()..color = isFinish ? const Color(0xFF8B1E24) : Colors.white,
     );
+    if (!isFinish && lvNeoBannerImage != null && bannerRect.width > 24) {
+      canvas.save();
+      canvas.clipRRect(
+        RRect.fromRectAndRadius(bannerRect, Radius.circular(lTop.scale * 0.3)),
+      );
+      canvas.drawImageRect(
+        lvNeoBannerImage!,
+        Rect.fromLTWH(
+          0,
+          0,
+          lvNeoBannerImage!.width.toDouble(),
+          lvNeoBannerImage!.height.toDouble(),
+        ),
+        bannerRect.deflate(bannerRect.height * 0.08),
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+      canvas.restore();
+    }
     canvas.drawRRect(
       RRect.fromRectAndRadius(bannerRect, Radius.circular(lTop.scale * 0.3)),
       Paint()
@@ -1062,7 +2018,7 @@ class Ski3DPainter extends CustomPainter {
   }
 
   // ---------------------------------------------------------------------------
-  // 4. Vivienne 3D Skier Seen From Behind (`180°` & `135°..225°` + Rig 3D)
+  // 4. Vivienne 3D Skier Seen From Behind (`BLENDER_LAB` 4 Editions + Snowball Crash!)
   // ---------------------------------------------------------------------------
 
   void _paintVivienneSkier3D(
@@ -1079,6 +2035,12 @@ class Ski3DPainter extends CustomPainter {
     final double s = skierPt.scale;
     final VivienneSkiEdition edition = engine.selectedEdition;
     final bool isAirborne = engine.playerY > 0.35;
+
+    // Special Cartoon 3D Snowball Crash State (`VivienneSkiAnimState.snowballCrash`)!
+    if (engine.isInSnowballCrash) {
+      _paintSnowballCrash3D(canvas, s, groundPt, skierPt, edition);
+      return;
+    }
 
     // 4.1 Ground Shadow Ellipse (shrinks & fades realistically when jumping!)
     final double airAttenuation =
@@ -1098,7 +2060,7 @@ class Ski3DPainter extends CustomPainter {
     canvas.translate(skierPt.x, skierPt.y);
     canvas.rotate(engine.playerRollRadians * 0.78);
 
-    // 4.2 Pair of 3D Parabolic LV Monogram & 24K Gold Skis beneath her feet
+    // 4.2 Pair of 3D Parabolic LV Skis (+ Streetwear Sneakers for `giantDenim`!)
     _paintParabolicSkis3D(canvas, s, edition, isAirborne);
 
     // 4.3 Squash & Stretch Transform anchored at ski bindings
@@ -1109,21 +2071,24 @@ class Ski3DPainter extends CustomPainter {
     final double heroWidth = heroHeight * 0.88;
     final int frameIdx = engine.activeSkierTurntableFrameIndex;
     final ui.Image? cyclesRearSprite =
-        (frameIdx >= 0 && frameIdx < turntableSprites.length)
+        (edition == VivienneSkiEdition.speedyV03 &&
+                frameIdx >= 0 &&
+                frameIdx < turntableSprites.length)
             ? turntableSprites[frameIdx]
             : null;
 
-    // Articulated Ski Poles & Raised V-Arms (drawn behind/around body for proper 3D layering)
+    // Articulated Ski Poles, Arms & Exclusive `BLENDER_LAB` Hand Accessories
     _paintArticulatedSkiPolesAndVArms(
       canvas,
       s,
       heroHeight,
       edition,
       isAirborne: isAirborne,
+      hasCyclesBody: cyclesRearSprite != null,
     );
 
     if (cyclesRearSprite != null) {
-      // Hybrid Cycles 3D Render (`vivienne_turntable_12.png` = 180° Rear + `09..15` Carving)
+      // Hybrid Cycles 3D Render for `speedyV03` (`vivienne_turntable_12.png` = 180° Rear + `09..15` Carving)
       final Rect src = Rect.fromLTWH(
         0,
         0,
@@ -1142,18 +2107,336 @@ class Ski3DPainter extends CustomPainter {
         Paint()..filterQuality = FilterQuality.medium,
       );
     } else {
-      // High-Precision Procedural 3D Rear-View Vivienne Rig (`vivienne_speedy_v03.blend` anatomy)
+      // Bespoke 3D Rear Rig for `wonderland`, `giantDenim`, `neoBlossom` & `speedyV03` fallback
       _paintProceduralRearVivienneRig(canvas, s, heroHeight, edition);
     }
 
-    // 4.4 Haute Couture Rear Ski Accessories: Goggles Strap on Back of Oak Head + Billowing Scarf
+    // 4.4 Haute Couture Rear Ski Accessories: Goggles Strap + Billowing Scarf + Edition Signatures
     _paintRearSkiGogglesAndScarf(canvas, s, heroHeight, edition);
-    if (cyclesRearSprite == null) {
-      _paintSwingingSpeedyBagOverlay(canvas, s, heroHeight, edition);
-    }
+    _paintEditionSignatureAccessories3D(
+      canvas,
+      s,
+      heroHeight,
+      edition,
+      hasCyclesBody: cyclesRearSprite != null,
+    );
 
     canvas.restore(); // End Squash & Stretch
     canvas.restore(); // End skier translation/roll
+  }
+
+  /// Cartoon 3D Rolling Snowball Crash (`rayon 1.1x -> 1.55x`, `360° × 3` tumble)
+  /// with Vivienne's skis, sneakers/feet, corolla petals & accessories sticking out!
+  void _paintSnowballCrash3D(
+    Canvas canvas,
+    double s,
+    _ProjectedPoint3D groundPt,
+    _ProjectedPoint3D skierPt,
+    VivienneSkiEdition edition,
+  ) {
+    final double growth = 1.10 + 0.45 * engine.snowballCrashProgress;
+    final double ballR = s * 1.48 * growth;
+
+    // Expanding ground shadow beneath the giant rolling snowball
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(groundPt.x, groundPt.y + s * 0.14),
+        width: ballR * 2.15,
+        height: ballR * 0.62,
+      ),
+      Paint()..color = const Color(0xFF14283C).withValues(alpha: 0.38),
+    );
+
+    canvas.save();
+    canvas.translate(skierPt.x, skierPt.y - ballR * 0.88);
+
+    // 1. Spinning 360° background limbs, skis, poles & petals protruding out of the snowball!
+    canvas.save();
+    canvas.rotate(engine.snowballRotationRadians);
+
+    final Paint stroke = Paint()
+      ..color = _kOutline
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = (s * 0.09).clamp(1.3, 2.8)
+      ..strokeJoin = StrokeJoin.round;
+
+    // Protruding Parabolic Skis at comical asymmetric angles
+    for (final double skiAng in const <double>[0.62, -2.35]) {
+      canvas.save();
+      canvas.rotate(skiAng);
+      final RRect skiBlade = RRect.fromRectAndRadius(
+        Rect.fromLTWH(-s * 0.19, ballR * 0.64, s * 0.38, ballR * 1.06),
+        Radius.circular(s * 0.15),
+      );
+      canvas.drawRRect(skiBlade, Paint()..color = edition.skiDeckColor);
+      canvas.drawRRect(
+        skiBlade,
+        Paint()
+          ..color = edition.skiAccentColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = (s * 0.065).clamp(1.2, 2.5),
+      );
+      canvas.drawRRect(skiBlade, stroke);
+      canvas.restore();
+    }
+
+    // Protruding 24K Gold Ski Poles with Star Blossom baskets
+    for (final double poleAng in const <double>[1.95, -0.92]) {
+      canvas.save();
+      canvas.rotate(poleAng);
+      canvas.drawLine(
+        Offset(0, ballR * 0.65),
+        Offset(0, ballR * 1.56),
+        Paint()
+          ..color = const Color(0xFFFFD700)
+          ..strokeWidth = (s * 0.095).clamp(1.5, 3.2)
+          ..strokeCap = StrokeCap.round,
+      );
+      canvas.drawCircle(
+        Offset(0, ballR * 1.38),
+        (s * 0.18).clamp(2.2, 6.0),
+        Paint()..color = edition.trimEdgeColor,
+      );
+      canvas.restore();
+    }
+
+    // Protruding Corolla Petals (`edition.petalColor`) with Monogram star motifs
+    for (final double petAng in const <double>[-0.22, 2.72]) {
+      final Offset pCenter = Offset(
+        math.cos(petAng) * ballR * 1.12,
+        math.sin(petAng) * ballR * 1.12,
+      );
+      canvas.drawCircle(
+        pCenter,
+        s * 0.68,
+        Paint()..color = edition.petalColor,
+      );
+      canvas.drawCircle(pCenter, s * 0.68, stroke);
+      canvas.drawCircle(
+        pCenter,
+        s * 0.52,
+        Paint()
+          ..color = edition.stitchGoldColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = (s * 0.05).clamp(1.0, 2.0),
+      );
+      final double mr = s * 0.24;
+      final Path star = Path()
+        ..moveTo(pCenter.dx, pCenter.dy - mr)
+        ..quadraticBezierTo(
+          pCenter.dx + mr * 0.22,
+          pCenter.dy - mr * 0.22,
+          pCenter.dx + mr,
+          pCenter.dy,
+        )
+        ..quadraticBezierTo(
+          pCenter.dx + mr * 0.22,
+          pCenter.dy + mr * 0.22,
+          pCenter.dx,
+          pCenter.dy + mr,
+        )
+        ..quadraticBezierTo(
+          pCenter.dx - mr * 0.22,
+          pCenter.dy + mr * 0.22,
+          pCenter.dx - mr,
+          pCenter.dy,
+        )
+        ..quadraticBezierTo(
+          pCenter.dx - mr * 0.22,
+          pCenter.dy - mr * 0.22,
+          pCenter.dx,
+          pCenter.dy - mr,
+        )
+        ..close();
+      canvas.drawPath(
+        star,
+        Paint()..color = edition.motifColor.withValues(alpha: 0.90),
+      );
+    }
+
+    // Protruding Feet (Fuchsia Sneakers for Giant Denim, Oak Wood boots otherwise)
+    for (final double footAng in const <double>[1.25, -1.65]) {
+      canvas.save();
+      canvas.rotate(footAng);
+      final RRect footRect = RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(0, ballR * 1.24),
+          width: s * 0.48,
+          height: s * 0.56,
+        ),
+        Radius.circular(s * 0.15),
+      );
+      canvas.drawRRect(
+        footRect,
+        Paint()
+          ..color = edition == VivienneSkiEdition.giantDenim
+              ? const Color(0xFFE31C58)
+              : const Color(0xFFC89D7C),
+      );
+      if (edition == VivienneSkiEdition.giantDenim) {
+        canvas.drawLine(
+          Offset(-s * 0.22, ballR * 1.44),
+          Offset(s * 0.22, ballR * 1.44),
+          Paint()
+            ..color = Colors.white
+            ..strokeWidth = (s * 0.11).clamp(1.4, 3.0),
+        );
+      }
+      canvas.drawRRect(footRect, stroke);
+      canvas.restore();
+    }
+
+    // Edition-specific accessory poking out of the tumbling snowball!
+    if (edition == VivienneSkiEdition.wonderland) {
+      // Red Lacquered Heart Balloon + White Bunny Ears poking out!
+      for (final double earDx in const <double>[-0.14, 0.14]) {
+        final RRect ear = RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(-ballR * 0.72 + earDx * s, -ballR * 1.18),
+            width: s * 0.20,
+            height: s * 0.56,
+          ),
+          Radius.circular(s * 0.10),
+        );
+        canvas.drawRRect(ear, Paint()..color = Colors.white);
+        canvas.drawRRect(ear, stroke);
+      }
+      canvas.drawLine(
+        Offset(ballR * 0.58, -ballR * 0.58),
+        Offset(ballR * 1.38, -ballR * 1.38),
+        Paint()
+          ..color = const Color(0xFFFFD700)
+          ..strokeWidth = (s * 0.085).clamp(1.3, 2.6),
+      );
+      _paintHeartShape(
+        canvas,
+        Offset(ballR * 1.46, -ballR * 1.46),
+        s * 0.50,
+        const Color(0xFFD91E48),
+      );
+    } else if (edition == VivienneSkiEdition.giantDenim) {
+      // Skateboard end with 2 white wheels sticking out!
+      final RRect deckTip = RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(ballR * 1.05, ballR * 0.20),
+          width: s * 0.78,
+          height: s * 0.34,
+        ),
+        Radius.circular(s * 0.15),
+      );
+      canvas.drawRRect(deckTip, Paint()..color = const Color(0xFF1C2026));
+      canvas.drawCircle(
+        Offset(ballR * 1.08, ballR * 0.40),
+        s * 0.15,
+        Paint()..color = Colors.white,
+      );
+      canvas.drawCircle(
+        Offset(ballR * 1.08, 0.0),
+        s * 0.15,
+        Paint()..color = Colors.white,
+      );
+    } else {
+      // Mini Speedy LV bag tumbling on the rim!
+      final RRect bag = RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(-ballR * 1.08, -ballR * 0.28),
+          width: s * 0.54,
+          height: s * 0.38,
+        ),
+        Radius.circular(s * 0.10),
+      );
+      canvas.drawRRect(bag, Paint()..color = const Color(0xFF2B1D14));
+      canvas.drawRRect(
+        bag,
+        Paint()
+          ..color = const Color(0xFFFFD700)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = (s * 0.05).clamp(1.0, 2.0),
+      );
+    }
+
+    // 2. Giant Lumpy Cartoon 3D Snowball Core (`bosselée & texturée`)
+    for (int k = 0; k < 8; k++) {
+      final double a = k * (math.pi * 0.25) + 0.2;
+      final Offset lumpC = Offset(
+        math.cos(a) * ballR * 0.66,
+        math.sin(a) * ballR * 0.66,
+      );
+      final double lumpR = ballR * (k.isEven ? 0.46 : 0.40);
+      canvas.drawCircle(lumpC, lumpR, Paint()..color = const Color(0xFFE3F2FD));
+      canvas.drawCircle(lumpC, lumpR, stroke);
+    }
+
+    canvas.drawCircle(
+      Offset.zero,
+      ballR,
+      Paint()
+        ..shader = ui.Gradient.radial(
+          Offset(-ballR * 0.28, -ballR * 0.32),
+          ballR * 1.32,
+          const <Color>[
+            Color(0xFFFFFFFF),
+            Color(0xFFEDF7FF),
+            Color(0xFFB3E5FC),
+            Color(0xFF81D4FA),
+          ],
+          const <double>[0.0, 0.48, 0.84, 1.0],
+        ),
+    );
+    canvas.drawCircle(Offset.zero, ballR, stroke);
+
+    // Embedded green pine needles & cartoon spiral tumble arcs on the snowball!
+    final Paint spiralPaint = Paint()
+      ..color = const Color(0xFF64B5F6).withValues(alpha: 0.75)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = (s * 0.08).clamp(1.2, 2.6)
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset.zero, radius: ballR * 0.62),
+      0.3,
+      math.pi * 1.15,
+      false,
+      spiralPaint,
+    );
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset.zero, radius: ballR * 0.34),
+      2.1,
+      math.pi * 1.1,
+      false,
+      spiralPaint,
+    );
+
+    final Paint needlePaint = Paint()
+      ..color = const Color(0xFF1B5E20)
+      ..strokeWidth = (s * 0.075).clamp(1.1, 2.4)
+      ..strokeCap = StrokeCap.round;
+    for (int n = 0; n < 5; n++) {
+      final double na = n * 1.25;
+      final Offset np = Offset(
+        math.cos(na) * ballR * 0.52,
+        math.sin(na) * ballR * 0.52,
+      );
+      canvas.drawLine(np, np + Offset(s * 0.24, -s * 0.14), needlePaint);
+      canvas.drawLine(np, np + Offset(s * 0.14, s * 0.22), needlePaint);
+    }
+
+    canvas.restore(); // End 360° rotation
+
+    // Orbiting snow puffs flying off tangentially around the snowball
+    for (int f = 0; f < 6; f++) {
+      final double fa = -engine.snowballRotationRadians * 1.3 + f * (math.pi / 3.0);
+      final Offset puff = Offset(
+        math.cos(fa) * ballR * 1.22,
+        math.sin(fa) * ballR * 1.15,
+      );
+      canvas.drawCircle(
+        puff,
+        (s * (0.16 + (f % 2) * 0.09)).clamp(1.8, 6.5),
+        Paint()..color = Colors.white.withValues(alpha: 0.92),
+      );
+    }
+
+    canvas.restore();
   }
 
   void _paintParabolicSkis3D(
@@ -1163,7 +2446,6 @@ class Ski3DPainter extends CustomPainter {
     bool isAirborne,
   ) {
     final SkiAerialTrickKind trick = engine.currentAerialTrick;
-    // Foreshortened 3rd-person perspective ski angles (converging slightly toward horizon)
     double leftSkiAngle = 0.08 + engine.playerRollRadians * 0.22;
     double rightSkiAngle = -0.08 + engine.playerRollRadians * 0.22;
     double stanceHalf = s * 0.29;
@@ -1189,8 +2471,8 @@ class Ski3DPainter extends CustomPainter {
       canvas.rotate(angle);
 
       final double skiW = s * 0.30;
-      final double tailY = s * 0.54; // Ski tail extending toward camera behind heels
-      final double tipY = -s * 0.68; // Foreshortened ski tip extending ahead of toes
+      final double tailY = s * 0.54;
+      final double tipY = -s * 0.68;
 
       final Path skiPath = Path()
         ..moveTo(-skiW * 0.56, tailY)
@@ -1199,13 +2481,11 @@ class Ski3DPainter extends CustomPainter {
         ..quadraticBezierTo(0, tipY, -skiW * 0.38, tipY * 0.74)
         ..close();
 
-      // Carmine leather/sidewall bevel (#8B1E24)
       canvas.drawPath(
         skiPath.shift(Offset(0, s * 0.06)),
         Paint()..color = edition.trimEdgeColor,
       );
 
-      // Ebony Monogram deck + 24K Gold center racing stripe
       canvas.drawPath(skiPath, Paint()..color = edition.skiDeckColor);
       canvas.drawPath(
         skiPath,
@@ -1222,16 +2502,53 @@ class Ski3DPainter extends CustomPainter {
           ..strokeWidth = (s * 0.045).clamp(1.0, 1.9),
       );
 
-      // Golden ski binding heelpiece right behind Vivienne's wooden heel
-      final RRect binding = RRect.fromRectAndRadius(
-        Rect.fromCenter(
-          center: Offset(0, s * 0.14),
-          width: skiW * 0.80,
-          height: s * 0.18,
-        ),
-        Radius.circular(s * 0.04),
-      );
-      canvas.drawRRect(binding, Paint()..color = const Color(0xFFFFD700));
+      if (edition == VivienneSkiEdition.giantDenim) {
+        // Streetwear Sneakers (`Vivienne_Sneaker_L/R`) in Fuchsia Pink `#E31C58`, White & Silver!
+        final RRect sole = RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(0, s * 0.06),
+            width: skiW * 1.18,
+            height: s * 0.36,
+          ),
+          Radius.circular(s * 0.12),
+        );
+        canvas.drawRRect(sole, Paint()..color = Colors.white);
+        final RRect upper = RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(0, -s * 0.02),
+            width: skiW * 1.04,
+            height: s * 0.28,
+          ),
+          Radius.circular(s * 0.10),
+        );
+        canvas.drawRRect(upper, Paint()..color = const Color(0xFFE31C58));
+        // White laces / heel stripe
+        canvas.drawLine(
+          Offset(-skiW * 0.32, -s * 0.05),
+          Offset(skiW * 0.32, -s * 0.05),
+          Paint()
+            ..color = Colors.white
+            ..strokeWidth = (s * 0.045).clamp(0.9, 1.8),
+        );
+        canvas.drawRRect(
+          sole,
+          Paint()
+            ..color = _kOutline
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = (s * 0.045).clamp(0.9, 1.8),
+        );
+      } else {
+        // Golden ski binding heelpiece right behind Vivienne's wooden heel
+        final RRect binding = RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(0, s * 0.14),
+            width: skiW * 0.80,
+            height: s * 0.18,
+          ),
+          Radius.circular(s * 0.04),
+        );
+        canvas.drawRRect(binding, Paint()..color = const Color(0xFFFFD700));
+      }
       canvas.restore();
     }
   }
@@ -1243,16 +2560,15 @@ class Ski3DPainter extends CustomPainter {
     VivienneSkiEdition edition,
   ) {
     final double carveShift =
-        (engine.playerRollRadians / 0.45).clamp(-1.0, 1.0) * s * 0.18;
+        (engine.playerRollRadians / 0.45).clamp(-1.0, 1.0) * s * 0.20;
     final Paint stroke = Paint()
       ..color = _kOutline
       ..style = PaintingStyle.stroke
       ..strokeWidth = (s * 0.085).clamp(1.4, 2.8)
       ..strokeJoin = StrokeJoin.round;
 
-    // 4 Vachetta Leather Corolla Petals (`Petal_Top/Bottom/Left/Right`) with carmine edge & gold stitches
     final Offset headCenter = Offset(carveShift * 0.5, -heroHeight * 0.56);
-    final double petalR = heroHeight * 0.23;
+    final double petalR = heroHeight * 0.232;
     final List<Offset> petalOffsets = <Offset>[
       Offset(0, -petalR * 1.18), // Top petal
       Offset(-petalR * 1.22, -petalR * 0.04), // Left petal
@@ -1260,25 +2576,65 @@ class Ski3DPainter extends CustomPainter {
       Offset(0, petalR * 1.04), // Bottom petal
     ];
 
+    final Color petalHighlight =
+        Color.lerp(edition.petalColor, Colors.white, 0.18)!;
+    final Color petalShade =
+        Color.lerp(edition.petalColor, Colors.black, 0.20)!;
+
     for (final Offset po in petalOffsets) {
       final Offset pc = headCenter + po;
-      // Carmine glazed edge (#8B1E24)
+      // 3D Glazed Leather/Denim Edge
       canvas.drawCircle(
         pc + Offset(carveShift * 0.22, s * 0.05),
         petalR,
         Paint()..color = edition.trimEdgeColor,
       );
-      // Vachetta leather back (#E3A17B)
-      canvas.drawCircle(pc, petalR * 0.96, Paint()..color = edition.petalColor);
-      canvas.drawCircle(pc, petalR * 0.96, stroke);
-      // Yellow saddle stitch ring (#E5B842)
+      // Shaded Corolla Petal Surface
       canvas.drawCircle(
         pc,
-        petalR * 0.80,
+        petalR * 0.96,
+        Paint()
+          ..shader = ui.Gradient.radial(
+            pc + Offset(-petalR * 0.22, -petalR * 0.25),
+            petalR * 1.25,
+            <Color>[petalHighlight, edition.petalColor, petalShade],
+            const <double>[0.0, 0.65, 1.0],
+          ),
+      );
+
+      // Monogram Canvas (`wonderland`) or Indigo Jacquard Denim (`giantDenim`) motifs on petals!
+      if (edition == VivienneSkiEdition.wonderland ||
+          edition == VivienneSkiEdition.giantDenim) {
+        final Paint motifPaint = Paint()
+          ..color = edition.motifColor.withValues(alpha: 0.85);
+        for (final Offset mo in <Offset>[
+          Offset(-petalR * 0.34, -petalR * 0.24),
+          Offset(petalR * 0.34, -petalR * 0.20),
+          Offset(0, petalR * 0.28),
+        ]) {
+          final Offset mc = pc + mo;
+          final double mr = petalR * 0.13;
+          // 4-pointed LV Monogram Star / Quatrefoil
+          final Path star = Path()
+            ..moveTo(mc.dx, mc.dy - mr)
+            ..quadraticBezierTo(mc.dx + mr * 0.22, mc.dy - mr * 0.22, mc.dx + mr, mc.dy)
+            ..quadraticBezierTo(mc.dx + mr * 0.22, mc.dy + mr * 0.22, mc.dx, mc.dy + mr)
+            ..quadraticBezierTo(mc.dx - mr * 0.22, mc.dy + mr * 0.22, mc.dx - mr, mc.dy)
+            ..quadraticBezierTo(mc.dx - mr * 0.22, mc.dy - mr * 0.22, mc.dx, mc.dy - mr)
+            ..close();
+          canvas.drawPath(star, motifPaint);
+        }
+      }
+
+      canvas.drawCircle(pc, petalR * 0.96, stroke);
+      // Saddle stitch ring (gold `#E5B842` or crisp white `#F4F8FC` for Giant Denim!)
+      canvas.drawCircle(
+        pc,
+        petalR * 0.81,
         Paint()
           ..color = edition.stitchGoldColor
           ..style = PaintingStyle.stroke
-          ..strokeWidth = (s * 0.045).clamp(0.9, 1.8),
+          ..strokeWidth = (s * 0.048).clamp(0.9, 1.9),
       );
     }
 
@@ -1286,12 +2642,17 @@ class Ski3DPainter extends CustomPainter {
     final Path bodyPath = Path()
       ..moveTo(-s * 0.56, -heroHeight * 0.36)
       ..lineTo(s * 0.56, -heroHeight * 0.36)
-      ..quadraticBezierTo(s * 0.76, -heroHeight * 0.14, s * 0.62, -s * 0.06)
-      ..lineTo(s * 0.10, -s * 0.06)
-      ..lineTo(0, -s * 0.20)
-      ..lineTo(-s * 0.10, -s * 0.06)
-      ..lineTo(-s * 0.62, -s * 0.06)
-      ..quadraticBezierTo(-s * 0.76, -heroHeight * 0.14, -s * 0.56, -heroHeight * 0.36)
+      ..quadraticBezierTo(s * 0.76, -heroHeight * 0.14, s * 0.62, -s * 0.08)
+      ..lineTo(s * 0.10, -s * 0.08)
+      ..lineTo(0, -s * 0.22)
+      ..lineTo(-s * 0.10, -s * 0.08)
+      ..lineTo(-s * 0.62, -s * 0.08)
+      ..quadraticBezierTo(
+        -s * 0.76,
+        -heroHeight * 0.14,
+        -s * 0.56,
+        -heroHeight * 0.36,
+      )
       ..close();
     canvas.drawPath(
       bodyPath,
@@ -1307,7 +2668,7 @@ class Ski3DPainter extends CustomPainter {
 
     // Subtle Monogram diamond accents on back of oak wood body
     final Paint monoPaint = Paint()
-      ..color = const Color(0xFF3A2618).withValues(alpha: 0.68);
+      ..color = const Color(0xFF3A2618).withValues(alpha: 0.62);
     for (final Offset mp in <Offset>[
       Offset(-s * 0.26, -heroHeight * 0.24),
       Offset(s * 0.26, -heroHeight * 0.24),
@@ -1332,45 +2693,345 @@ class Ski3DPainter extends CustomPainter {
     canvas.drawCircle(headCenter, headR, stroke);
   }
 
+  /// Exclusive 3D `BLENDER_LAB` Accessories seen from behind on the slopes:
+  /// - `wonderland`: White Bunny (`Wonderland_White_Bunny`) perched atop Top Petal + Red Lacquered Heart Balloon (`#D91E48`) on golden stem!
+  /// - `giantDenim`: Beige `LOUIS VUITTON` Swing Tag on left wrist + Large LV Cruise Skateboard with 4 white wheels on right arm!
+  /// - `neoBlossom` / `speedyV03` (without Cycles): Swinging Mini Speedy LV bag!
+  void _paintEditionSignatureAccessories3D(
+    Canvas canvas,
+    double s,
+    double heroHeight,
+    VivienneSkiEdition edition, {
+    required bool hasCyclesBody,
+  }) {
+    final double armRaise = engine.armRaiseProgress.clamp(0.0, 1.0);
+    final double carveShift =
+        (engine.playerRollRadians / 0.45).clamp(-1.0, 1.0) * s * 0.20;
+    final Offset headCenter = Offset(carveShift * 0.5, -heroHeight * 0.56);
+    final double petalR = heroHeight * 0.232;
+
+    final Offset leftHand = Offset.lerp(
+      Offset(-s * 1.18, -heroHeight * 0.20),
+      Offset(-s * 1.26, -heroHeight * 0.82),
+      armRaise,
+    )!;
+    final Offset rightHand = Offset.lerp(
+      Offset(s * 1.18, -heroHeight * 0.20),
+      Offset(s * 1.26, -heroHeight * 0.82),
+      armRaise,
+    )!;
+
+    final Paint stroke = Paint()
+      ..color = _kOutline
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = (s * 0.07).clamp(1.1, 2.3)
+      ..strokeJoin = StrokeJoin.round;
+
+    switch (edition) {
+      case VivienneSkiEdition.wonderland:
+        // 1. `Wonderland_White_Bunny` perched right on the crown of the Top Petal!
+        final double bunnyBob =
+            math.sin(engine.scarfWavePhase * 0.8).abs() * s * 0.06;
+        final Offset topPetalApex =
+            headCenter + Offset(0, -petalR * 2.12 - bunnyBob);
+
+        // Bunny plump body
+        final Rect bunnyBody = Rect.fromCenter(
+          center: topPetalApex + Offset(0, -s * 0.20),
+          width: s * 0.42,
+          height: s * 0.46,
+        );
+        canvas.drawOval(bunnyBody, Paint()..color = const Color(0xFFFAFAFA));
+        canvas.drawOval(bunnyBody, stroke);
+        // Fluffy cottontail seen from behind!
+        canvas.drawCircle(
+          topPetalApex + Offset(0, -s * 0.08),
+          s * 0.11,
+          Paint()..color = Colors.white,
+        );
+        // Bunny head
+        final Offset bunnyHead = topPetalApex + Offset(0, -s * 0.50);
+        canvas.drawCircle(
+          bunnyHead,
+          s * 0.18,
+          Paint()..color = const Color(0xFFFFFFFF),
+        );
+        canvas.drawCircle(bunnyHead, s * 0.18, stroke);
+        // Two tall upright white bunny ears with soft pink inner lining
+        for (final double ex in const <double>[-0.08, 0.08]) {
+          final Rect earOuter = Rect.fromCenter(
+            center: bunnyHead + Offset(s * ex, -s * 0.30),
+            width: s * 0.11,
+            height: s * 0.36,
+          );
+          canvas.drawOval(earOuter, Paint()..color = Colors.white);
+          canvas.drawOval(
+            earOuter.deflate(s * 0.025),
+            Paint()..color = const Color(0xFFF48FB1),
+          );
+          canvas.drawOval(earOuter, stroke);
+        }
+
+        // 2. `Wonderland_Heart_Balloon` (`#D91E48`) on gleaming Golden Stem above Right Hand!
+        canvas.save();
+        canvas.translate(rightHand.dx, rightHand.dy);
+        canvas.rotate(0.32 + engine.speedyBagSwingRadians * 0.65);
+
+        final Offset stemTop = Offset(s * 0.22, -s * 1.48);
+        canvas.drawLine(
+          Offset.zero,
+          stemTop,
+          Paint()
+            ..color = _kOutline
+            ..strokeWidth = (s * 0.11).clamp(1.4, 3.2)
+            ..strokeCap = StrokeCap.round,
+        );
+        canvas.drawLine(
+          Offset.zero,
+          stemTop,
+          Paint()
+            ..color = const Color(0xFFFFD700)
+            ..strokeWidth = (s * 0.065).clamp(1.0, 2.2)
+            ..strokeCap = StrokeCap.round,
+        );
+        // Golden knot bead under the heart
+        canvas.drawCircle(
+          stemTop,
+          s * 0.09,
+          Paint()..color = const Color(0xFFFFD700),
+        );
+
+        final Offset heartCenter = stemTop + Offset(0, -s * 0.42);
+        _paintHeartShape(
+          canvas,
+          heartCenter,
+          s * 0.54,
+          const Color(0xFFD91E48),
+          withGoldStar: true,
+        );
+        canvas.restore();
+
+      case VivienneSkiEdition.giantDenim:
+        // 1. Beige `LOUIS VUITTON` Swing Tag (`Vivienne_Swing_Tag`) on Left Wrist!
+        canvas.save();
+        canvas.translate(leftHand.dx, leftHand.dy);
+        canvas.rotate(-0.22 + engine.speedyBagSwingRadians * 0.85);
+        canvas.drawLine(
+          Offset.zero,
+          Offset(0, s * 0.22),
+          Paint()
+            ..color = const Color(0xFFFFD700)
+            ..strokeWidth = (s * 0.05).clamp(0.9, 1.8),
+        );
+        final RRect tagRect = RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(0, s * 0.52),
+            width: s * 0.34,
+            height: s * 0.62,
+          ),
+          Radius.circular(s * 0.05),
+        );
+        canvas.drawRRect(tagRect, Paint()..color = const Color(0xFFDFC7A7));
+        canvas.drawRRect(tagRect, stroke);
+        canvas.drawLine(
+          Offset(0, s * 0.34),
+          Offset(0, s * 0.68),
+          Paint()
+            ..color = const Color(0xFF3A2618)
+            ..strokeWidth = (s * 0.045).clamp(0.8, 1.6),
+        );
+        canvas.restore();
+
+        // 2. Large LV Cruise Skateboard (`Skateboard_*`) with 4 chunky White Wheels on Right Arm!
+        canvas.save();
+        canvas.translate(rightHand.dx + s * 0.08, rightHand.dy + s * 0.14);
+        canvas.rotate(-0.18 + engine.speedyBagSwingRadians * 0.45);
+
+        final RRect deckOuter = RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset.zero,
+            width: s * 0.46,
+            height: s * 1.62,
+          ),
+          Radius.circular(s * 0.23),
+        );
+        // Crisp white edge ply + black LV grip deck
+        canvas.drawRRect(
+          deckOuter.inflate(s * 0.03),
+          Paint()..color = Colors.white,
+        );
+        canvas.drawRRect(deckOuter, Paint()..color = const Color(0xFF1C2026));
+        canvas.drawRRect(deckOuter.inflate(s * 0.03), stroke);
+
+        // Metallic silver trucks + 4 chunky white urethane wheels!
+        for (final double ty in <double>[-s * 0.46, s * 0.46]) {
+          canvas.drawLine(
+            Offset(-s * 0.32, ty),
+            Offset(s * 0.32, ty),
+            Paint()
+              ..color = const Color(0xFFCFD8DC)
+              ..strokeWidth = (s * 0.10).clamp(1.2, 2.6),
+          );
+          for (final double wxWheel in <double>[-s * 0.32, s * 0.32]) {
+            final Offset wc = Offset(wxWheel, ty);
+            canvas.drawCircle(
+              wc,
+              (s * 0.14).clamp(1.8, 4.8),
+              Paint()..color = const Color(0xFFF5F7FA),
+            );
+            canvas.drawCircle(wc, (s * 0.14).clamp(1.8, 4.8), stroke);
+            canvas.drawCircle(
+              wc,
+              (s * 0.05).clamp(0.8, 1.8),
+              Paint()..color = const Color(0xFFE31C58),
+            );
+          }
+        }
+        canvas.restore();
+
+      case VivienneSkiEdition.neoBlossom:
+        _paintSwingingSpeedyBagOverlay(
+          canvas,
+          s,
+          heroHeight,
+          edition,
+          bagColor: _kLvNeoCobalt,
+          handleColor: const Color(0xFFF3B7C3),
+        );
+
+      case VivienneSkiEdition.speedyV03:
+        if (!hasCyclesBody) {
+          _paintSwingingSpeedyBagOverlay(canvas, s, heroHeight, edition);
+        }
+    }
+  }
+
+  void _paintHeartShape(
+    Canvas canvas,
+    Offset center,
+    double sizeR,
+    Color color, {
+    bool withGoldStar = false,
+  }) {
+    final Path heart = Path()
+      ..moveTo(center.dx, center.dy + sizeR * 0.78)
+      ..cubicTo(
+        center.dx - sizeR * 1.15,
+        center.dy + sizeR * 0.12,
+        center.dx - sizeR * 0.92,
+        center.dy - sizeR * 0.85,
+        center.dx,
+        center.dy - sizeR * 0.30,
+      )
+      ..cubicTo(
+        center.dx + sizeR * 0.92,
+        center.dy - sizeR * 0.85,
+        center.dx + sizeR * 1.15,
+        center.dy + sizeR * 0.12,
+        center.dx,
+        center.dy + sizeR * 0.78,
+      )
+      ..close();
+
+    canvas.drawPath(
+      heart,
+      Paint()
+        ..shader = ui.Gradient.radial(
+          center + Offset(-sizeR * 0.25, -sizeR * 0.28),
+          sizeR * 1.25,
+          <Color>[
+            const Color(0xFFFF8A80),
+            color,
+            const Color(0xFF880E4F),
+          ],
+          const <double>[0.0, 0.55, 1.0],
+        ),
+    );
+    // Glossy lacquer highlight
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: center + Offset(sizeR * 0.34, -sizeR * 0.22),
+        width: sizeR * 0.28,
+        height: sizeR * 0.18,
+      ),
+      Paint()..color = Colors.white.withValues(alpha: 0.75),
+    );
+    if (withGoldStar) {
+      final double sr = sizeR * 0.30;
+      final Path star = Path()
+        ..moveTo(center.dx, center.dy - sr)
+        ..lineTo(center.dx + sr * 0.28, center.dy - sr * 0.28)
+        ..lineTo(center.dx + sr, center.dy)
+        ..lineTo(center.dx + sr * 0.28, center.dy + sr * 0.28)
+        ..lineTo(center.dx, center.dy + sr)
+        ..lineTo(center.dx - sr * 0.28, center.dy + sr * 0.28)
+        ..lineTo(center.dx - sr, center.dy)
+        ..lineTo(center.dx - sr * 0.28, center.dy - sr * 0.28)
+        ..close();
+      canvas.drawPath(star, Paint()..color = const Color(0xFFFFD700));
+    }
+    canvas.drawPath(
+      heart,
+      Paint()
+        ..color = _kOutline
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = (sizeR * 0.13).clamp(1.0, 2.3),
+    );
+  }
+
   void _paintArticulatedSkiPolesAndVArms(
     Canvas canvas,
     double s,
     double heroHeight,
     VivienneSkiEdition edition, {
     required bool isAirborne,
+    required bool hasCyclesBody,
   }) {
     final double armRaise = engine.armRaiseProgress.clamp(0.0, 1.0);
-    // Shoulder anchors
     final Offset leftShoulder = Offset(-s * 0.55, -heroHeight * 0.36);
     final Offset rightShoulder = Offset(s * 0.55, -heroHeight * 0.36);
 
-    // Interpolate hands from tucked aerodynamic schuss (down/out) to triumphant V-Arms high above head!
     final Offset leftHandSchuss = Offset(-s * 1.18, -heroHeight * 0.20);
     final Offset leftHandVictoryV = Offset(-s * 1.26, -heroHeight * 0.82);
     final Offset rightHandSchuss = Offset(s * 1.18, -heroHeight * 0.20);
     final Offset rightHandVictoryV = Offset(s * 1.26, -heroHeight * 0.82);
 
-    final Offset leftHand = Offset.lerp(leftHandSchuss, leftHandVictoryV, armRaise)!;
+    final Offset leftHand =
+        Offset.lerp(leftHandSchuss, leftHandVictoryV, armRaise)!;
     final Offset rightHand =
         Offset.lerp(rightHandSchuss, rightHandVictoryV, armRaise)!;
 
-    // When arms are raised (`armRaise > 0.35`) or no Cycles sprite is drawn, draw articulated LV leather strap arms!
-    if (armRaise > 0.32 || turntableSprites.isEmpty) {
+    // Draw articulated leather strap arms whenever raised in V OR when rendering custom 3D edition rig!
+    if (armRaise > 0.32 || !hasCyclesBody) {
+      final Color strapBase = (edition == VivienneSkiEdition.wonderland ||
+              edition == VivienneSkiEdition.giantDenim)
+          ? const Color(0xFFE3A17B)
+          : const Color(0xFF2B1D14);
+      final Color strapEdge = (edition == VivienneSkiEdition.wonderland ||
+              edition == VivienneSkiEdition.giantDenim)
+          ? const Color(0xFFC62828)
+          : edition.trimEdgeColor;
+
+      final Paint armOutline = Paint()
+        ..color = _kOutline
+        ..strokeWidth = (s * 0.24).clamp(2.8, 7.8)
+        ..strokeCap = StrokeCap.round;
       final Paint armStrapPaint = Paint()
-        ..color = const Color(0xFF2B1D14)
-        ..strokeWidth = (s * 0.20).clamp(2.4, 7.0)
+        ..color = strapBase
+        ..strokeWidth = (s * 0.18).clamp(2.2, 6.4)
         ..strokeCap = StrokeCap.round;
       final Paint armEdgePaint = Paint()
-        ..color = edition.trimEdgeColor
-        ..strokeWidth = (s * 0.08).clamp(1.2, 3.0)
+        ..color = strapEdge
+        ..strokeWidth = (s * 0.07).clamp(1.1, 2.6)
         ..strokeCap = StrokeCap.round;
 
+      canvas.drawLine(leftShoulder, leftHand, armOutline);
+      canvas.drawLine(rightShoulder, rightHand, armOutline);
       canvas.drawLine(leftShoulder, leftHand, armStrapPaint);
       canvas.drawLine(rightShoulder, rightHand, armStrapPaint);
       canvas.drawLine(leftShoulder, leftHand, armEdgePaint);
       canvas.drawLine(rightShoulder, rightHand, armEdgePaint);
 
-      // 24K Gold Clasps at hands (`Vivienne_Clasp_L/R`)
       final Paint goldPaint = Paint()..color = const Color(0xFFFFD700);
       canvas.drawCircle(leftHand, s * 0.12, goldPaint);
       canvas.drawCircle(rightHand, s * 0.12, goldPaint);
@@ -1398,7 +3059,6 @@ class Ski3DPainter extends CustomPainter {
     canvas.drawLine(rightHand, rightPoleTip, poleOutline);
     canvas.drawLine(rightHand, rightPoleTip, goldShaft);
 
-    // Star Blossom snow baskets near pole tips
     for (final (Offset hand, Offset tip) in <(Offset, Offset)>[
       (leftHand, leftPoleTip),
       (rightHand, rightPoleTip),
@@ -1423,7 +3083,6 @@ class Ski3DPainter extends CustomPainter {
     double heroHeight,
     VivienneSkiEdition edition,
   ) {
-    // 1. Monogram Elastic Ski Goggles Strap wrapping the back of Vivienne's Oak Head
     final double strapY = -heroHeight * 0.51;
     final double headSpanW = heroHeight * 0.29;
     final RRect strap = RRect.fromRectAndRadius(
@@ -1434,7 +3093,7 @@ class Ski3DPainter extends CustomPainter {
       ),
       Radius.circular(s * 0.07),
     );
-    canvas.drawRRect(strap, Paint()..color = const Color(0xFF2B1D14));
+    canvas.drawRRect(strap, Paint()..color = edition.skiDeckColor);
     canvas.drawRRect(
       strap,
       Paint()
@@ -1442,7 +3101,6 @@ class Ski3DPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = (s * 0.045).clamp(0.9, 1.8),
     );
-    // Center brass buckle on back of goggles strap
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromCenter(
@@ -1455,7 +3113,6 @@ class Ski3DPainter extends CustomPainter {
       Paint()..color = const Color(0xFFFFD700),
     );
 
-    // 2. Billowing Cashmere Scarf (`Vivienne_Scarf`) streaming in the Alpine wind!
     final Offset neck = Offset(0, -heroHeight * 0.36);
     final double wave1 = math.sin(engine.scarfWavePhase) * s * 0.28;
     final double wave2 = math.cos(engine.scarfWavePhase * 1.3) * s * 0.36;
@@ -1500,8 +3157,10 @@ class Ski3DPainter extends CustomPainter {
     Canvas canvas,
     double s,
     double heroHeight,
-    VivienneSkiEdition edition,
-  ) {
+    VivienneSkiEdition edition, {
+    Color bagColor = const Color(0xFF2B1D14),
+    Color handleColor = const Color(0xFFE3A17B),
+  }) {
     final double armRaise = engine.armRaiseProgress.clamp(0.0, 1.0);
     final Offset anchor = Offset.lerp(
       Offset(-s * 0.95, -heroHeight * 0.14),
@@ -1521,7 +3180,7 @@ class Ski3DPainter extends CustomPainter {
       ),
       Radius.circular(s * 0.12),
     );
-    canvas.drawRRect(bagBody, Paint()..color = const Color(0xFF2B1D14));
+    canvas.drawRRect(bagBody, Paint()..color = bagColor);
     canvas.drawRRect(
       bagBody,
       Paint()
@@ -1530,7 +3189,6 @@ class Ski3DPainter extends CustomPainter {
         ..strokeWidth = (s * 0.05).clamp(1.0, 2.0),
     );
 
-    // Vachetta leather top handles
     canvas.drawArc(
       Rect.fromCenter(
         center: Offset(0, s * 0.06),
@@ -1541,7 +3199,7 @@ class Ski3DPainter extends CustomPainter {
       math.pi,
       false,
       Paint()
-        ..color = const Color(0xFFE3A17B)
+        ..color = handleColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = (s * 0.06).clamp(1.1, 2.2),
     );
@@ -1606,6 +3264,7 @@ class Ski3DPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant Ski3DPainter oldDelegate) {
     return oldDelegate.engine != engine ||
+        oldDelegate.lvNeoBannerImage != lvNeoBannerImage ||
         oldDelegate.turntableSprites.length != turntableSprites.length;
   }
 }
