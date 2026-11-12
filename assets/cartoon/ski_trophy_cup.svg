@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="trophyGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFF9C4" />
+      <stop offset="45%" stop-color="#FFD700" />
+      <stop offset="100%" stop-color="#C77800" />
+    </linearGradient>
+    <radialGradient id="crystalBlueGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#29B6F6" />
+    </radialGradient>
+  </defs>
+  <g id="base-shadow">
+    <ellipse cx="256" cy="462" rx="142" ry="24" fill="#2B1105" opacity="0.30" />
+  </g>
+  <g id="main-body" stroke="#2B1105" stroke-width="16" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M142 132 Q72 132 82 214 Q92 276 168 278" fill="none" />
+    <path d="M370 132 Q440 132 430 214 Q420 276 344 278" fill="none" />
+    <path d="M140 96 L372 96 L346 266 Q328 338 256 338 Q184 338 166 266 Z" fill="url(#trophyGoldGrad)" />
+    <rect x="230" y="334" width="52" height="66" rx="10" fill="url(#trophyGoldGrad)" />
+    <rect x="164" y="396" width="184" height="48" rx="16" fill="#8B1E24" />
+    <polygon points="256,144 276,192 324,212 276,232 256,280 236,232 188,212 236,192" fill="url(#crystalBlueGrad)" />
+  </g>
+  <g id="specular-highlights">
+    <path d="M166 118 L202 118 L190 256 L174 246 Z" fill="#FFFFFF" opacity="0.72" />
+  </g>
+</svg>
