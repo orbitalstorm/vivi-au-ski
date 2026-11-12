@@ -8,6 +8,7 @@ import '../models/ski_models.dart';
 import 'vivienne_3d_volumetric_rig.dart';
 
 enum _DepthActorKind {
+  terrainSlice,
   worldProp,
   mogul,
   jumpRamp,
@@ -29,6 +30,36 @@ class _DepthRenderItem {
   final int index;
 }
 
+class _TerrainSlice3D {
+  const _TerrainSlice3D({
+    required this.zFar,
+    required this.zNear,
+    required this.farCols,
+    required this.nearCols,
+    required this.farMogulH,
+    required this.nearMogulH,
+    required this.farOuterL,
+    required this.farOuterR,
+    required this.nearOuterL,
+    required this.nearOuterR,
+    required this.isCrestEdge,
+    required this.localReliefGrad,
+  });
+
+  final double zFar;
+  final double zNear;
+  final List<_ProjectedPoint3D> farCols;
+  final List<_ProjectedPoint3D> nearCols;
+  final List<double> farMogulH;
+  final List<double> nearMogulH;
+  final _ProjectedPoint3D farOuterL;
+  final _ProjectedPoint3D farOuterR;
+  final _ProjectedPoint3D nearOuterL;
+  final _ProjectedPoint3D nearOuterR;
+  final bool isCrestEdge;
+  final double localReliefGrad;
+}
+
 class _ProjectedPoint3D {
   const _ProjectedPoint3D({
     required this.x,
@@ -44,7 +75,7 @@ class _ProjectedPoint3D {
 }
 
 /// High-Precision 60–120 FPS 3rd-Person Rear Perspective 3D Renderer (`Camera3D`)
-/// for `VIVI AU SKI : Descente Royale 3D` (`v1.2.0`).
+/// for `VIVI AU SKI : Descente Royale 3D` (`v1.4.0`).
 class Ski3DPainter extends CustomPainter {
   Ski3DPainter({
     required this.engine,
@@ -66,8 +97,10 @@ class Ski3DPainter extends CustomPainter {
 
   static const Color _kOutline = Color(0xFF2B1105);
   static const Color _kLvNeoCobalt = Color(0xFF1638E8);
-  static const double _kZNear = 6.2;
-  static const double _kZFar = 225.0;
+  static const double _kZNear = 5.8;
+  static const double _kZFar = 235.0;
+  static const int _kPisteCols = 10;
+  static const int _kSliceCount = 82;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -82,33 +115,41 @@ class Ski3DPainter extends CustomPainter {
                 math.max(1.0, track.maxSpeedKmh - track.baseSpeedKmh))
             .clamp(0.0, 1.3);
 
-    // Steep Slope Geometry (`24°`, `34°`, `45°`) & High-Speed Dynamic FOV
+    // Steep Slope Geometry (`24°`, `34°`, `45°`) & Slope-Reactive Dynamic Camera (`v1.4.0`)
     final double slopeRad = track.slopeDegrees * math.pi / 180.0;
     final double slopeTan = math.tan(slopeRad);
     final double steepFactor = ((slopeTan - 0.445) / 0.555).clamp(0.0, 1.0);
+    final double localReliefGrad = engine.localReliefGradientAt(engine.playerZ);
 
     final double camDistBack = 11.4 +
-        speedNorm * 1.65 +
-        steepFactor * 0.85 +
+        speedNorm * 1.55 +
+        steepFactor * 0.75 +
         (engine.playerY * 0.18).clamp(0.0, 1.6);
     final double camZ = engine.playerZ - camDistBack;
     final double camWorldX = engine.trackCenterOffsetX(engine.playerZ) +
         engine.playerLateralOffset * 0.70;
-    final double camHeight = 14.8 +
-        steepFactor * 2.4 +
-        (engine.playerY * 0.30).clamp(0.0, 2.8);
+    final double camHeight = (14.4 +
+            steepFactor * 1.85 -
+            localReliefGrad * 2.15 +
+            (engine.playerY * 0.30).clamp(0.0, 2.8))
+        .clamp(12.2, 18.8);
     final double focal =
-        size.width * (0.87 - speedNorm * 0.065 - steepFactor * 0.045);
-    final double crestPitchShift =
-        math.cos(engine.playerZ * 0.036) * 0.008 * (0.6 + steepFactor * 0.5);
+        size.width * (0.87 - speedNorm * 0.060 - steepFactor * 0.040);
+
+    // Dynamic slope-reactive horizonY:
+    // - Rises toward top of screen on plunging walls (`localReliefGrad < 0`) to reveal the deep valley!
+    // - Lowers on rising replats (`localReliefGrad > 0`) as the convex crest climbs ABOVE `horizonY`
+    //   to mask the background mountains & sky!
     final double horizonY = size.height *
-        (0.252 -
-                steepFactor * 0.028 -
-                speedNorm * 0.016 +
-                crestPitchShift +
+        (0.258 -
+                steepFactor * 0.024 -
+                speedNorm * 0.012 +
+                localReliefGrad * 0.115 +
                 engine.playerY * 0.004)
-            .clamp(0.185, 0.30);
+            .clamp(0.175, 0.325);
     final double playerReliefRef = engine.relativeReliefAtZ(engine.playerZ);
+    final double localDropScale =
+        (0.058 - localReliefGrad * 0.045).clamp(0.020, 0.096);
 
     // Subtle camera roll synchronized with carving lean
     final double camRoll = -engine.playerRollRadians * 0.16;
@@ -118,11 +159,12 @@ class Ski3DPainter extends CustomPainter {
       final double s = focal / zRel;
       final double reliefDelta =
           engine.relativeReliefAtZ(worldZ) - playerReliefRef;
-      // Plunging downhill drop scaled by real track `slopeDegrees` (`24°..45°`)
-      final double slopeDrop = (worldZ - engine.playerZ) * slopeTan * 0.062;
+      final double reliefVisual = reliefDelta * 1.62;
+      final double slopeDrop =
+          (worldZ - engine.playerZ) * slopeTan * localDropScale;
       final double sx = size.width * 0.5 + (worldX - camWorldX) * s;
       final double sy =
-          horizonY + (camHeight - yAboveSnow - reliefDelta + slopeDrop) * s;
+          horizonY + (camHeight - yAboveSnow - reliefVisual + slopeDrop) * s;
       return _ProjectedPoint3D(x: sx, y: sy, scale: s, zRel: zRel);
     }
 
@@ -137,12 +179,46 @@ class Ski3DPainter extends CustomPainter {
     // 1. Sky Dome, Sun / Aurora Borealis, LV Blossom Hot Air Balloons & Parallax Alpine Peaks
     _paintAlpineSkyAndMountains(canvas, size, track, horizonY, camWorldX);
 
-    // 2. Trapezoidal 3D Snow Slope Mesh (`5.0 m` corduroy bands) & Dual Persistent Ski Marks
-    _paintSnowSlopeMesh3D(canvas, size, track, camZ, horizonY, project);
-    _paintPersistentSkiTracks3D(canvas, track, camZ, project);
+    // Base distant valley snow mist below `horizonY`
+    canvas.drawRect(
+      Rect.fromLTRB(
+        -size.width * 0.25,
+        horizonY,
+        size.width * 1.25,
+        size.height + 60,
+      ),
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset(0, horizonY),
+          Offset(0, size.height),
+          <Color>[
+            track.snowShadowColor,
+            track.snowMidColor,
+            track.snowBrightColor,
+          ],
+          const <double>[0.0, 0.35, 1.0],
+        ),
+    );
 
-    // 3. Strict Painter's Algorithm Z-Sort (zFar -> zNear) of all 3D World Entities
+    // 2. Build Transversely Subdivided 3D Snow Slope Mesh Slices (`zFar -> zNear`)
+    //    with integrated 3D Mogul elevation & back-face crest culling!
+    final List<_TerrainSlice3D> visibleSlices =
+        _buildVisibleSnowSlopeSlices3D(track, camZ, project);
+
+    // 3. Unified Painter's Algorithm Z-Sort (`zFar -> zNear`) interleaving 3D Terrain Slices
+    //    AND all 3D World Actors so foreground convex snow crests genuinely occlude
+    //    distant track sections, gates, trees, and spectators behind the ridge!
     final List<_DepthRenderItem> items = <_DepthRenderItem>[];
+    for (int i = 0; i < visibleSlices.length; i++) {
+      items.add(
+        _DepthRenderItem(
+          zWorld: visibleSlices[i].zFar + 0.9,
+          kind: _DepthActorKind.terrainSlice,
+          index: i,
+        ),
+      );
+    }
+
     final double zMinVisible = camZ + _kZNear * 0.75;
     final double zMaxVisible = camZ + _kZFar;
 
@@ -154,9 +230,14 @@ class Ski3DPainter extends CustomPainter {
         _ => 0.0,
       };
       if (prop.z + margin >= zMinVisible && prop.z - margin <= zMaxVisible) {
+        final double sortZ = switch (prop.kind) {
+          SkiPropKind.lvBannerPost => prop.z - 3.8,
+          SkiPropKind.cableCarPylon => prop.z - 8.0,
+          _ => prop.z - 0.6,
+        };
         items.add(
           _DepthRenderItem(
-            zWorld: prop.z,
+            zWorld: sortZ,
             kind: _DepthActorKind.worldProp,
             index: i,
           ),
@@ -165,20 +246,25 @@ class Ski3DPainter extends CustomPainter {
     }
 
     for (int i = 0; i < engine.moguls.length; i++) {
-      final double z = engine.moguls[i].z;
-      if (z >= zMinVisible && z <= zMaxVisible) {
+      final SkiMogul3D m = engine.moguls[i];
+      if (m.z >= zMinVisible && m.z <= zMaxVisible) {
         items.add(
-          _DepthRenderItem(zWorld: z, kind: _DepthActorKind.mogul, index: i),
+          _DepthRenderItem(
+            zWorld: m.z - m.radiusZ * 0.45,
+            kind: _DepthActorKind.mogul,
+            index: i,
+          ),
         );
       }
     }
 
     for (int i = 0; i < engine.jumpRamps.length; i++) {
-      final double z = engine.jumpRamps[i].z;
-      if (z >= zMinVisible && z <= zMaxVisible) {
+      final SkiJumpRamp3D r = engine.jumpRamps[i];
+      if (r.z + r.length * 0.5 >= zMinVisible &&
+          r.z - r.length * 0.5 <= zMaxVisible) {
         items.add(
           _DepthRenderItem(
-            zWorld: z,
+            zWorld: r.z - r.length * 0.5 - 0.6,
             kind: _DepthActorKind.jumpRamp,
             index: i,
           ),
@@ -191,7 +277,7 @@ class Ski3DPainter extends CustomPainter {
       if (z >= zMinVisible && z <= zMaxVisible) {
         items.add(
           _DepthRenderItem(
-            zWorld: z,
+            zWorld: z - 0.6,
             kind: _DepthActorKind.slalomGate,
             index: i,
           ),
@@ -203,7 +289,11 @@ class Ski3DPainter extends CustomPainter {
       final SkiBlossomCollectible3D b = engine.blossoms[i];
       if (!b.collected && b.z >= zMinVisible && b.z <= zMaxVisible) {
         items.add(
-          _DepthRenderItem(zWorld: b.z, kind: _DepthActorKind.blossom, index: i),
+          _DepthRenderItem(
+            zWorld: b.z - 0.5,
+            kind: _DepthActorKind.blossom,
+            index: i,
+          ),
         );
       }
     }
@@ -213,7 +303,7 @@ class Ski3DPainter extends CustomPainter {
       if (p.z >= zMinVisible && p.z <= zMaxVisible) {
         items.add(
           _DepthRenderItem(
-            zWorld: p.z,
+            zWorld: p.z - 0.4,
             kind: _DepthActorKind.snowParticle,
             index: i,
           ),
@@ -221,10 +311,10 @@ class Ski3DPainter extends CustomPainter {
       }
     }
 
-    // Insert Vivienne at her exact 3D depth `playerZ`
+    // Insert Vivienne at her exact foreground 3D depth
     items.add(
       _DepthRenderItem(
-        zWorld: engine.playerZ,
+        zWorld: engine.playerZ - 1.2,
         kind: _DepthActorKind.viviennePlayer,
       ),
     );
@@ -236,6 +326,16 @@ class Ski3DPainter extends CustomPainter {
 
     for (final _DepthRenderItem item in items) {
       switch (item.kind) {
+        case _DepthActorKind.terrainSlice:
+          _paintSingleSnowSlopeSlice3D(
+            canvas,
+            size,
+            track,
+            camZ,
+            visibleSlices[item.index],
+            project,
+            isClosestSlice: item.index == visibleSlices.length - 1,
+          );
         case _DepthActorKind.worldProp:
           _paintWorldProp3D(
             canvas,
@@ -253,9 +353,14 @@ class Ski3DPainter extends CustomPainter {
         case _DepthActorKind.blossom:
           _paintBlossom3D(canvas, engine.blossoms[item.index], project);
         case _DepthActorKind.viviennePlayer:
+          _paintPersistentSkiTracks3D(canvas, track, camZ, project);
           _paintVivienneSkier3D(canvas, size, track, project);
         case _DepthActorKind.snowParticle:
-          _paintSnowParticle3D(canvas, engine.snowParticles[item.index], project);
+          _paintSnowParticle3D(
+            canvas,
+            engine.snowParticles[item.index],
+            project,
+          );
       }
     }
 
@@ -618,136 +723,366 @@ class Ski3DPainter extends CustomPainter {
   }
 
   // ---------------------------------------------------------------------------
-  // 2. Trapezoidal 3D Snow Slope Mesh (`5.0 m` Corduroy) & Dual Ski Marks
+  // 2. Transversely Subdivided 3D Snow Slope Mesh (Integrated Moguls & Crest Occlusion)
   // ---------------------------------------------------------------------------
 
-  void _paintSnowSlopeMesh3D(
-    Canvas canvas,
-    Size size,
+  List<_TerrainSlice3D> _buildVisibleSnowSlopeSlices3D(
     SkiTrackId track,
     double camZ,
-    double horizonY,
     _ProjectedPoint3D Function(double x, double y, double z) project,
   ) {
-    // Base snow fill below horizon
-    canvas.drawRect(
-      Rect.fromLTRB(
-        -size.width * 0.25,
-        horizonY,
-        size.width * 1.25,
-        size.height + 60,
-      ),
-      Paint()
-        ..shader = ui.Gradient.linear(
-          Offset(0, horizonY),
-          Offset(0, size.height),
-          <Color>[track.snowShadowColor, track.snowMidColor, track.snowBrightColor],
-          const <double>[0.0, 0.35, 1.0],
-        ),
-    );
-
-    // Render 68 perspective trapezoidal snow bands from zFar -> zNear (`5.0 m` grooming!)
-    const int sliceCount = 68;
+    final List<_TerrainSlice3D> slices = <_TerrainSlice3D>[];
     final double halfW = track.trackHalfWidthMeters;
+
+    List<_ProjectedPoint3D> sampleCols(double z, double cx, List<double> outH) {
+      final List<_ProjectedPoint3D> pts = <_ProjectedPoint3D>[];
+      for (int c = 0; c <= _kPisteCols; c++) {
+        final double u = -1.0 + (2.0 * c / _kPisteCols);
+        final double wx = cx + u * halfW;
+        final double mh = engine.mogulElevationAt(wx, z);
+        outH.add(mh);
+        pts.add(project(wx, mh, z));
+      }
+      return pts;
+    }
 
     double prevZ = camZ + _kZFar;
     double prevCx = engine.trackCenterOffsetX(prevZ);
-    _ProjectedPoint3D prevLeft = project(prevCx - halfW, 0.0, prevZ);
-    _ProjectedPoint3D prevRight = project(prevCx + halfW, 0.0, prevZ);
-    _ProjectedPoint3D prevOuterL = project(prevCx - halfW * 3.2, 0.5, prevZ);
-    _ProjectedPoint3D prevOuterR = project(prevCx + halfW * 3.2, 0.5, prevZ);
+    List<double> prevMogulH = <double>[];
+    List<_ProjectedPoint3D> prevCols = sampleCols(prevZ, prevCx, prevMogulH);
+    _ProjectedPoint3D prevOuterL = project(prevCx - halfW * 3.5, 0.45, prevZ);
+    _ProjectedPoint3D prevOuterR = project(prevCx + halfW * 3.5, 0.45, prevZ);
+    bool wasBackFacing = false;
 
-    for (int s = 1; s <= sliceCount; s++) {
-      // Non-linear depth distribution giving ultra-smooth detail close to Vivienne
-      final double t = s / sliceCount;
+    for (int s = 1; s <= _kSliceCount; s++) {
+      final double t = s / _kSliceCount;
       final double zRel = _kZFar * math.pow(_kZNear / _kZFar, t);
       final double currZ = camZ + zRel;
       final double currCx = engine.trackCenterOffsetX(currZ);
 
-      final _ProjectedPoint3D currLeft = project(currCx - halfW, 0.0, currZ);
-      final _ProjectedPoint3D currRight = project(currCx + halfW, 0.0, currZ);
+      final List<double> currMogulH = <double>[];
+      final List<_ProjectedPoint3D> currCols =
+          sampleCols(currZ, currCx, currMogulH);
       final _ProjectedPoint3D currOuterL =
-          project(currCx - halfW * 3.2, 0.5, currZ);
+          project(currCx - halfW * 3.5, 0.45, currZ);
       final _ProjectedPoint3D currOuterR =
-          project(currCx + halfW * 3.2, 0.5, currZ);
+          project(currCx + halfW * 3.5, 0.45, currZ);
 
-      // Tighter `5.0 m` groomed snow bands for high-velocity downhill rush!
-      final int worldBand = (currZ / 5.0).floor();
-      final bool altBand = worldBand.isEven;
+      final double prevMidY = prevCols[_kPisteCols ~/ 2].y;
+      final double currMidY = currCols[_kPisteCols ~/ 2].y;
 
-      // Off-piste powder banks (Left & Right shoulders with alpine blue shadows)
-      final Color powderColor = altBand
-          ? Color.lerp(track.snowMidColor, track.snowShadowColor, 0.36)!
-          : Color.lerp(track.snowMidColor, track.snowShadowColor, 0.52)!;
-      final Path leftBank = Path()
-        ..moveTo(prevOuterL.x, prevOuterL.y)
-        ..lineTo(prevLeft.x, prevLeft.y)
-        ..lineTo(currLeft.x, currLeft.y)
-        ..lineTo(currOuterL.x, currOuterL.y)
-        ..close();
-      canvas.drawPath(leftBank, Paint()..color = powderColor);
+      // Back-face culling for hidden reverse slopes behind convex alpine crests:
+      // As `z` decreases (`zFar -> zNear`), visible front-facing slopes project LOWER on screen (`currMidY >= prevMidY`).
+      final bool isBackFacing = currMidY < prevMidY - 0.35;
+      if (!isBackFacing) {
+        slices.add(
+          _TerrainSlice3D(
+            zFar: prevZ,
+            zNear: currZ,
+            farCols: prevCols,
+            nearCols: currCols,
+            farMogulH: prevMogulH,
+            nearMogulH: currMogulH,
+            farOuterL: prevOuterL,
+            farOuterR: prevOuterR,
+            nearOuterL: currOuterL,
+            nearOuterR: currOuterR,
+            isCrestEdge: wasBackFacing,
+            localReliefGrad: engine.localReliefGradientAt((prevZ + currZ) * 0.5),
+          ),
+        );
+      }
 
-      final Path rightBank = Path()
-        ..moveTo(prevRight.x, prevRight.y)
-        ..lineTo(prevOuterR.x, prevOuterR.y)
-        ..lineTo(currOuterR.x, currOuterR.y)
-        ..lineTo(currRight.x, currRight.y)
-        ..close();
-      canvas.drawPath(rightBank, Paint()..color = powderColor);
+      wasBackFacing = isBackFacing;
+      prevZ = currZ;
+      prevCx = currCx;
+      prevCols = currCols;
+      prevMogulH = currMogulH;
+      prevOuterL = currOuterL;
+      prevOuterR = currOuterR;
+    }
 
-      // Groomed corduroy ski piste corridor
-      final Color pisteColor = altBand
-          ? track.snowBrightColor
-          : Color.lerp(track.snowBrightColor, track.snowShadowColor, 0.19)!;
-      final Path pisteQuad = Path()
-        ..moveTo(prevLeft.x, prevLeft.y)
-        ..lineTo(prevRight.x, prevRight.y)
-        ..lineTo(currRight.x, currRight.y)
-        ..lineTo(currLeft.x, currLeft.y)
-        ..close();
-      canvas.drawPath(pisteQuad, Paint()..color = pisteColor);
+    return slices;
+  }
 
-      // Longitudinal corduroy grooming grooves rushing beneath skis
-      if (altBand && currLeft.scale > 2.2) {
-        final Paint cordPaint = Paint()
-          ..color = track.snowShadowColor.withValues(alpha: 0.28)
-          ..strokeWidth = (currLeft.scale * 0.05).clamp(0.8, 1.8);
-        for (final double frac in const <double>[0.25, 0.50, 0.75]) {
-          final double px0 =
-              prevLeft.x + (prevRight.x - prevLeft.x) * frac;
-          final double py0 =
-              prevLeft.y + (prevRight.y - prevLeft.y) * frac;
-          final double px1 =
-              currLeft.x + (currRight.x - currLeft.x) * frac;
-          final double py1 =
-              currLeft.y + (currRight.y - currLeft.y) * frac;
-          canvas.drawLine(Offset(px0, py0), Offset(px1, py1), cordPaint);
+  void _paintSingleSnowSlopeSlice3D(
+    Canvas canvas,
+    Size size,
+    SkiTrackId track,
+    double camZ,
+    _TerrainSlice3D slice,
+    _ProjectedPoint3D Function(double x, double y, double z) project, {
+    required bool isClosestSlice,
+  }) {
+    final _ProjectedPoint3D prevLeft = slice.farCols.first;
+    final _ProjectedPoint3D prevRight = slice.farCols.last;
+    final _ProjectedPoint3D currLeft = slice.nearCols.first;
+    final _ProjectedPoint3D currRight = slice.nearCols.last;
+
+    final int worldBand = (slice.zNear / 5.0).floor();
+    final bool altBand = worldBand.isEven;
+
+    // Relief shading: sunlit white on rising convex rollers (`localReliefGrad > 0`),
+    // deeper alpine shadow tint on steep plunging walls (`localReliefGrad < 0`)!
+    final double plungeShade =
+        (-slice.localReliefGrad * 0.32).clamp(-0.12, 0.24);
+
+    // 1. Off-piste powder banks (opaque snow shoulders masking mountains & distant valleys behind crests!)
+    final Color powderColor = Color.lerp(
+      track.snowMidColor,
+      track.snowShadowColor,
+      ((altBand ? 0.34 : 0.50) + plungeShade * 0.55).clamp(0.18, 0.68),
+    )!;
+    final Path leftBank = Path()
+      ..moveTo(slice.farOuterL.x, slice.farOuterL.y)
+      ..lineTo(prevLeft.x, prevLeft.y)
+      ..lineTo(currLeft.x, currLeft.y)
+      ..lineTo(slice.nearOuterL.x, slice.nearOuterL.y)
+      ..close();
+    canvas.drawPath(leftBank, Paint()..color = powderColor);
+
+    final Path rightBank = Path()
+      ..moveTo(prevRight.x, prevRight.y)
+      ..lineTo(slice.farOuterR.x, slice.farOuterR.y)
+      ..lineTo(slice.nearOuterR.x, slice.nearOuterR.y)
+      ..lineTo(currRight.x, currRight.y)
+      ..close();
+    canvas.drawPath(rightBank, Paint()..color = powderColor);
+
+    // 2. Transversely Subdivided Groomed Piste Mesh (`_kPisteCols = 10` columns)
+    //    deforming smoothly in 3D over integrated moguls!
+    final Color basePisteCol = altBand
+        ? Color.lerp(
+            track.snowBrightColor,
+            track.snowShadowColor,
+            plungeShade.clamp(0.0, 0.20),
+          )!
+        : Color.lerp(
+            track.snowBrightColor,
+            track.snowShadowColor,
+            (0.18 + plungeShade).clamp(0.08, 0.34),
+          )!;
+
+    for (int c = 0; c < _kPisteCols; c++) {
+      final _ProjectedPoint3D f0 = slice.farCols[c];
+      final _ProjectedPoint3D f1 = slice.farCols[c + 1];
+      final _ProjectedPoint3D n1 = slice.nearCols[c + 1];
+      final _ProjectedPoint3D n0 = slice.nearCols[c];
+
+      final double farMH = (slice.farMogulH[c] + slice.farMogulH[c + 1]) * 0.5;
+      final double nearMH =
+          (slice.nearMogulH[c] + slice.nearMogulH[c + 1]) * 0.5;
+      final double avgMH = (farMH + nearMH) * 0.5;
+
+      Color quadColor = basePisteCol;
+      if (avgMH > 0.03) {
+        final double slopeM = farMH - nearMH;
+        if (slopeM > 0.02) {
+          // Downhill lee side of mogul facing camera -> crisp alpine shadow sculpting!
+          quadColor = Color.lerp(
+            quadColor,
+            track.snowShadowColor,
+            (0.20 + slopeM * 0.55).clamp(0.12, 0.52),
+          )!;
+        } else {
+          // Sunlit crest / uphill dome of mogul -> sparkling white snow!
+          quadColor = Color.lerp(
+            quadColor,
+            Colors.white,
+            (0.35 + avgMH * 0.45).clamp(0.25, 0.85),
+          )!;
         }
       }
 
-      // Crisp piste border snow-cushion lines (`LV_NEO` cobalt & track badge accents)
-      final Paint edgePaint = Paint()
-        ..color = altBand
-            ? _kLvNeoCobalt.withValues(alpha: 0.65)
-            : track.badgeColor.withValues(alpha: 0.72)
-        ..strokeWidth = math.max(1.4, currLeft.scale * 0.16)
-        ..strokeCap = StrokeCap.round;
-      canvas.drawLine(
-        Offset(prevLeft.x, prevLeft.y),
-        Offset(currLeft.x, currLeft.y),
-        edgePaint,
-      );
-      canvas.drawLine(
-        Offset(prevRight.x, prevRight.y),
-        Offset(currRight.x, currRight.y),
-        edgePaint,
-      );
+      final Path subQuad = Path()
+        ..moveTo(f0.x, f0.y)
+        ..lineTo(f1.x, f1.y)
+        ..lineTo(n1.x, n1.y)
+        ..lineTo(n0.x, n0.y)
+        ..close();
+      canvas.drawPath(subQuad, Paint()..color = quadColor);
+    }
 
-      prevZ = currZ;
-      prevLeft = currLeft;
-      prevRight = currRight;
-      prevOuterL = currOuterL;
-      prevOuterR = currOuterR;
+    // Extend bottom apron on closest slice so steep pitches never leave a bottom gap
+    if (isClosestSlice) {
+      final double bottomY = size.height + 50.0;
+      final Path apron = Path()
+        ..moveTo(slice.nearOuterL.x, slice.nearOuterL.y)
+        ..lineTo(currLeft.x, currLeft.y)
+        ..lineTo(currRight.x, currRight.y)
+        ..lineTo(slice.nearOuterR.x, slice.nearOuterR.y)
+        ..lineTo(size.width * 1.35, bottomY)
+        ..lineTo(-size.width * 0.35, bottomY)
+        ..close();
+      canvas.drawPath(apron, Paint()..color = track.snowBrightColor);
+    }
+
+    // 3. Longitudinal 3D Corduroy Grooming Grooves curving over Moguls!
+    if (currLeft.scale > 1.85) {
+      final Paint cordPaint = Paint()
+        ..color = track.snowShadowColor
+            .withValues(alpha: altBand ? 0.32 : 0.18)
+        ..strokeWidth = (currLeft.scale * 0.055).clamp(0.8, 1.9);
+      for (int c = 1; c < _kPisteCols; c++) {
+        if (!altBand && c.isOdd) continue;
+        final _ProjectedPoint3D p0 = slice.farCols[c];
+        final _ProjectedPoint3D p1 = slice.nearCols[c];
+        canvas.drawLine(Offset(p0.x, p0.y), Offset(p1.x, p1.y), cordPaint);
+      }
+    }
+
+    // 4. Sunlit Convex Crest Rim Highlight ("Rupture de Pente" horizon line!)
+    if (slice.isCrestEdge) {
+      final Path crestLine = Path()
+        ..moveTo(slice.farOuterL.x, slice.farOuterL.y)
+        ..lineTo(prevLeft.x, prevLeft.y);
+      for (int c = 1; c <= _kPisteCols; c++) {
+        crestLine.lineTo(slice.farCols[c].x, slice.farCols[c].y);
+      }
+      crestLine.lineTo(slice.farOuterR.x, slice.farOuterR.y);
+      canvas.drawPath(
+        crestLine,
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.92)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = (prevLeft.scale * 0.22).clamp(1.6, 3.8),
+      );
+    }
+
+    // 5. Crisp Piste Border Ribbons (`LV_NEO` Cobalt & Track Badge Accents)
+    final Paint edgePaint = Paint()
+      ..color = altBand
+          ? _kLvNeoCobalt.withValues(alpha: 0.68)
+          : track.badgeColor.withValues(alpha: 0.76)
+      ..strokeWidth = math.max(1.5, currLeft.scale * 0.17)
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      Offset(prevLeft.x, prevLeft.y),
+      Offset(currLeft.x, currLeft.y),
+      edgePaint,
+    );
+    canvas.drawLine(
+      Offset(prevRight.x, prevRight.y),
+      Offset(currRight.x, currRight.y),
+      edgePaint,
+    );
+
+    // 6. 3D Slalom Snow-Dye Ideal Trajectory & Directional S-Chevrons (occluded naturally by crests!)
+    if (engine.isSlalomMode && engine.slalomGates.isNotEmpty) {
+      _paintSlalomSliceTrajectory3D(canvas, slice.zFar, slice.zNear, project);
+    }
+  }
+
+  /// Evaluates the smooth S-curve Slalom trajectory X at world `z` connecting consecutive Left/Right gates.
+  (double x, bool nextIsLeft)? _slalomTrajectoryAtZ(double z) {
+    final List<SkiSlalomGate3D> gates = engine.slalomGates;
+    if (gates.isEmpty) return null;
+    if (z < 10.0 || z > gates.last.z + 6.0) return null;
+
+    if (z <= gates.first.z) {
+      final SkiSlalomGate3D g0 = gates.first;
+      final double startX = engine.trackCenterOffsetX(10.0);
+      final double span = math.max(1.0, g0.z - 10.0);
+      final double t = ((z - 10.0) / span).clamp(0.0, 1.0);
+      final double s = 0.5 - 0.5 * math.cos(t * math.pi);
+      return (startX + (g0.centerX - startX) * s, g0.isLeftGate);
+    }
+
+    for (int i = 0; i < gates.length - 1; i++) {
+      final SkiSlalomGate3D gA = gates[i];
+      final SkiSlalomGate3D gB = gates[i + 1];
+      if (z >= gA.z && z <= gB.z) {
+        final double span = math.max(1.0, gB.z - gA.z);
+        final double t = ((z - gA.z) / span).clamp(0.0, 1.0);
+        final double s = 0.5 - 0.5 * math.cos(t * math.pi);
+        return (gA.centerX + (gB.centerX - gA.centerX) * s, gB.isLeftGate);
+      }
+    }
+    return (gates.last.centerX, gates.last.isLeftGate);
+  }
+
+  void _paintSlalomSliceTrajectory3D(
+    Canvas canvas,
+    double zFar,
+    double zNear,
+    _ProjectedPoint3D Function(double x, double y, double z) project,
+  ) {
+    final (double xFar, bool nextIsLeftFar)? farSample =
+        _slalomTrajectoryAtZ(zFar);
+    final (double xNear, bool nextIsLeftNear)? nearSample =
+        _slalomTrajectoryAtZ(zNear);
+    if (farSample == null || nearSample == null) return;
+
+    final double mhFar = engine.mogulElevationAt(farSample.$1, zFar) + 0.04;
+    final double mhNear = engine.mogulElevationAt(nearSample.$1, zNear) + 0.04;
+    final _ProjectedPoint3D pFar = project(farSample.$1, mhFar, zFar);
+    final _ProjectedPoint3D pNear = project(nearSample.$1, mhNear, zNear);
+    if (pNear.scale < 0.95) return;
+
+    final int dashIdx = (zNear / 3.0).floor();
+    final Color dyeColor = nearSample.$2
+        ? const Color(0xFFFFB300) // Heading toward Red/Gold LEFT gate
+        : const Color(0xFF00B0FF); // Heading toward Blue/Azure RIGHT gate
+
+    // Soft snow-dye ribbon under dotted centerline
+    canvas.drawLine(
+      Offset(pFar.x, pFar.y),
+      Offset(pNear.x, pNear.y),
+      Paint()
+        ..color = dyeColor.withValues(alpha: 0.24)
+        ..strokeWidth = (pNear.scale * 0.68).clamp(2.2, 14.0)
+        ..strokeCap = StrokeCap.round,
+    );
+
+    if (dashIdx.isEven) {
+      canvas.drawLine(
+        Offset(pFar.x, pFar.y),
+        Offset(pNear.x, pNear.y),
+        Paint()
+          ..color = dyeColor.withValues(alpha: 0.88)
+          ..strokeWidth = (pNear.scale * 0.20).clamp(1.5, 4.8)
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    // Directional snow chevrons every ~12m pointing toward the next alternating gate!
+    final int chevBucketFar = (zFar / 11.5).floor();
+    final int chevBucketNear = (zNear / 11.5).floor();
+    if (chevBucketFar != chevBucketNear && pNear.scale > 1.55) {
+      final double zMid = (zFar + zNear) * 0.5;
+      final (double, bool)? midS = _slalomTrajectoryAtZ(zMid);
+      final (double, bool)? aheadS = _slalomTrajectoryAtZ(zMid + 1.8);
+      if (midS != null && aheadS != null) {
+        final double dx = aheadS.$1 - midS.$1;
+        const double dz = 1.8;
+        final double len = math.sqrt(dx * dx + dz * dz);
+        final double nx = -dz / len;
+        final double nz = dx / len;
+        final double mhTip =
+            engine.mogulElevationAt(aheadS.$1, zMid + 1.8) + 0.05;
+        final double mhWing = engine.mogulElevationAt(midS.$1, zMid) + 0.05;
+        final _ProjectedPoint3D tip =
+            project(aheadS.$1, mhTip, zMid + 1.8);
+        final _ProjectedPoint3D wingL =
+            project(midS.$1 + nx * 1.35, mhWing, zMid + nz * 1.35);
+        final _ProjectedPoint3D wingR =
+            project(midS.$1 - nx * 1.35, mhWing, zMid - nz * 1.35);
+        final Path chev = Path()
+          ..moveTo(wingL.x, wingL.y)
+          ..lineTo(tip.x, tip.y)
+          ..lineTo(wingR.x, wingR.y);
+        canvas.drawPath(
+          chev,
+          Paint()
+            ..color = midS.$2
+                ? const Color(0xFFD32F2F)
+                : const Color(0xFF1565C0)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = (tip.scale * 0.22).clamp(1.6, 4.6)
+            ..strokeCap = StrokeCap.round
+            ..strokeJoin = StrokeJoin.round,
+        );
+      }
     }
   }
 
@@ -766,10 +1101,26 @@ class Ski3DPainter extends CustomPainter {
       if (!p0.hasSkiMarks || !p1.hasSkiMarks) continue;
       if (p1.z <= camZ + _kZNear * 0.72) continue;
 
-      final _ProjectedPoint3D l0 = project(p0.leftSkiX, 0.02, p0.z);
-      final _ProjectedPoint3D l1 = project(p1.leftSkiX, 0.02, p1.z);
-      final _ProjectedPoint3D r0 = project(p0.rightSkiX, 0.02, p0.z);
-      final _ProjectedPoint3D r1 = project(p1.rightSkiX, 0.02, p1.z);
+      final _ProjectedPoint3D l0 = project(
+        p0.leftSkiX,
+        engine.mogulElevationAt(p0.leftSkiX, p0.z) + 0.03,
+        p0.z,
+      );
+      final _ProjectedPoint3D l1 = project(
+        p1.leftSkiX,
+        engine.mogulElevationAt(p1.leftSkiX, p1.z) + 0.03,
+        p1.z,
+      );
+      final _ProjectedPoint3D r0 = project(
+        p0.rightSkiX,
+        engine.mogulElevationAt(p0.rightSkiX, p0.z) + 0.03,
+        p0.z,
+      );
+      final _ProjectedPoint3D r1 = project(
+        p1.rightSkiX,
+        engine.mogulElevationAt(p1.rightSkiX, p1.z) + 0.03,
+        p1.z,
+      );
 
       final double alpha = (0.28 + p1.carveIntensity * 0.36).clamp(0.22, 0.65);
       final Paint groovePaint = Paint()
@@ -783,7 +1134,7 @@ class Ski3DPainter extends CustomPainter {
   }
 
   // ---------------------------------------------------------------------------
-  // 3. Depth-Sorted 3D Scenery & Gameplay Entities
+  // 3. Depth-Sorted 3D Scenery, Spectators & Gameplay Entities
   // ---------------------------------------------------------------------------
 
   void _paintWorldProp3D(
@@ -815,6 +1166,8 @@ class Ski3DPainter extends CustomPainter {
         _paintCartoonSnowman3D(canvas, prop, project);
       case SkiPropKind.flutteringPennantPost:
         _paintFlutteringPennantAndSupporter3D(canvas, prop, project);
+      case SkiPropKind.vivienneSpectator:
+        _paintVivienneSpectator3D(canvas, prop, project);
       case SkiPropKind.snowCannon:
         _paintSnowCannon3D(canvas, track, prop, project);
       case SkiPropKind.startArch:
@@ -959,61 +1312,90 @@ class Ski3DPainter extends CustomPainter {
     SkiMogul3D mogul,
     _ProjectedPoint3D Function(double x, double y, double z) project,
   ) {
-    final _ProjectedPoint3D c = project(mogul.x, 0.0, mogul.z);
-    final double s = c.scale;
-    if (s < 1.2) return;
+    final _ProjectedPoint3D base = project(mogul.x, 0.0, mogul.z);
+    final _ProjectedPoint3D apex =
+        project(mogul.x, mogul.heightMeters, mogul.z);
+    final double s = base.scale;
+    if (s < 1.10) return;
 
-    final double w = mogul.radiusX * 2.0 * s;
-    final double h = mogul.heightMeters * 1.85 * s;
+    final double w = mogul.radiusX * 2.05 * s;
+    final double h = math.max(s * 0.58, (base.y - apex.y).abs() * 1.28);
 
-    // Downhill soft blue shadow crescent
+    // 1. Soft Alpine Trough Shadow beneath the deformed mogul base
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(c.x, c.y + h * 0.14),
+        center: Offset(base.x + w * 0.04, base.y + h * 0.14),
         width: w * 1.04,
-        height: h * 0.65,
+        height: h * 0.54,
       ),
-      Paint()..color = track.snowShadowColor.withValues(alpha: 0.72),
+      Paint()..color = track.snowShadowColor.withValues(alpha: 0.62),
     );
 
-    // Sculpted 3D snow dome
-    final Path dome = Path()
-      ..moveTo(c.x - w * 0.5, c.y + h * 0.10)
+    // 2. Sculpted 3D Snow Dome rising seamlessly from the piste mesh
+    final Path domePath = Path()
+      ..moveTo(base.x - w * 0.52, base.y + h * 0.06)
       ..cubicTo(
-        c.x - w * 0.38,
-        c.y - h * 0.95,
-        c.x + w * 0.38,
-        c.y - h * 0.95,
-        c.x + w * 0.5,
-        c.y + h * 0.10,
+        base.x - w * 0.36,
+        apex.y - h * 0.24,
+        base.x + w * 0.36,
+        apex.y - h * 0.24,
+        base.x + w * 0.52,
+        base.y + h * 0.06,
       )
-      ..quadraticBezierTo(c.x, c.y + h * 0.34, c.x - w * 0.5, c.y + h * 0.10)
+      ..quadraticBezierTo(
+        base.x,
+        base.y + h * 0.24,
+        base.x - w * 0.52,
+        base.y + h * 0.06,
+      )
       ..close();
 
+    final Rect domeBounds = domePath.getBounds();
+    final Color shadowBlue = Color.lerp(
+      track.snowShadowColor,
+      const Color(0xFF64B5F6),
+      0.42,
+    )!;
     canvas.drawPath(
-      dome,
+      domePath,
       Paint()
         ..shader = ui.Gradient.linear(
-          Offset(c.x, c.y - h),
-          Offset(c.x, c.y + h * 0.3),
-          <Color>[Colors.white, track.snowMidColor, track.snowShadowColor],
-          const <double>[0.0, 0.65, 1.0],
+          Offset(domeBounds.left, domeBounds.top),
+          Offset(domeBounds.right, domeBounds.bottom),
+          <Color>[
+            Colors.white,
+            track.snowMidColor,
+            shadowBlue.withValues(alpha: 0.85),
+          ],
+          const <double>[0.0, 0.52, 1.0],
         ),
     );
+
+    // 3. Crisp Glacier Contour Rim & Specular Snow Cap so moguls read clearly at speed
+    final Path crestArc = Path()
+      ..moveTo(base.x - w * 0.46, base.y + h * 0.02)
+      ..cubicTo(
+        base.x - w * 0.30,
+        apex.y - h * 0.22,
+        base.x + w * 0.30,
+        apex.y - h * 0.22,
+        base.x + w * 0.46,
+        base.y + h * 0.02,
+      );
     canvas.drawPath(
-      dome,
+      crestArc,
       Paint()
-        ..color = const Color(0xFF546E7A).withValues(alpha: 0.45)
+        ..color = const Color(0xFF3979A8).withValues(alpha: 0.52)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = (s * 0.08).clamp(1.0, 2.2),
+        ..strokeWidth = (s * 0.12).clamp(1.1, 2.8)
+        ..strokeCap = StrokeCap.round,
     );
 
-    // Specular snow crest highlight
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(c.x - w * 0.08, c.y - h * 0.42),
+        center: Offset(apex.x - w * 0.08, apex.y + h * 0.06),
         width: w * 0.44,
-        height: h * 0.22,
+        height: h * 0.24,
       ),
       Paint()..color = Colors.white.withValues(alpha: 0.90),
     );
@@ -1032,13 +1414,15 @@ class Ski3DPainter extends CustomPainter {
     final double zNearRamp = math.max(rawZNearRamp, camZApprox + _kZNear + 0.2);
     final double nearClipFrac =
         ((zNearRamp - rawZNearRamp) / ramp.length).clamp(0.0, 0.95);
-    final double nearClippedY = 0.05 + ramp.heightMeters * nearClipFrac;
+    final double nearClippedY = 0.04 + ramp.heightMeters * nearClipFrac;
 
     final double halfW = ramp.width * 0.5;
     final _ProjectedPoint3D nL =
         project(ramp.x - halfW, nearClippedY, zNearRamp);
     final _ProjectedPoint3D nR =
         project(ramp.x + halfW, nearClippedY, zNearRamp);
+    final _ProjectedPoint3D nLBase = project(ramp.x - halfW, 0.0, zNearRamp);
+    final _ProjectedPoint3D nRBase = project(ramp.x + halfW, 0.0, zNearRamp);
     final _ProjectedPoint3D fLTop =
         project(ramp.x - halfW, ramp.heightMeters, zFarRamp);
     final _ProjectedPoint3D fRTop =
@@ -1046,18 +1430,86 @@ class Ski3DPainter extends CustomPainter {
     final _ProjectedPoint3D fLBase = project(ramp.x - halfW, 0.0, zFarRamp);
     final _ProjectedPoint3D fRBase = project(ramp.x + halfW, 0.0, zFarRamp);
 
-    if (fLTop.scale < 0.9) return;
+    if (fLTop.scale < 0.82) return;
 
-    // LV Monogram Trunk front/side wall under the elevated lip
+    final bool isSmall = ramp.sizeTier == SkiRampSizeTier.small;
+    final bool isLarge = ramp.sizeTier == SkiRampSizeTier.large;
+
+    // 1. Sculpted Lateral Snow Buttresses on `large` Big Air Superstructure!
+    if (isLarge) {
+      const double buttressW = 1.45;
+      final _ProjectedPoint3D bFL =
+          project(ramp.x - halfW - buttressW, 0.0, zFarRamp);
+      final _ProjectedPoint3D bNL =
+          project(ramp.x - halfW - buttressW * 0.75, 0.0, zNearRamp);
+      final _ProjectedPoint3D bFR =
+          project(ramp.x + halfW + buttressW, 0.0, zFarRamp);
+      final _ProjectedPoint3D bNR =
+          project(ramp.x + halfW + buttressW * 0.75, 0.0, zNearRamp);
+
+      final Path leftButtress = Path()
+        ..moveTo(nL.x, nL.y)
+        ..lineTo(fLTop.x, fLTop.y)
+        ..lineTo(bFL.x, bFL.y)
+        ..lineTo(bNL.x, bNL.y)
+        ..close();
+      final Path rightButtress = Path()
+        ..moveTo(nR.x, nR.y)
+        ..lineTo(fRTop.x, fRTop.y)
+        ..lineTo(bFR.x, bFR.y)
+        ..lineTo(bNR.x, bNR.y)
+        ..close();
+      final Paint buttressPaint = Paint()..color = const Color(0xFFD6EEFF);
+      canvas.drawPath(leftButtress, buttressPaint);
+      canvas.drawPath(rightButtress, buttressPaint);
+    }
+
+    // 2. 3D Side & Front Structural Walls
+    final Color wallColor = isSmall
+        ? const Color(0xFF90CAF9)
+        : (isLarge ? const Color(0xFF2B1810) : const Color(0xFF3A2618));
+
+    final Path leftSideWall = Path()
+      ..moveTo(nL.x, nL.y)
+      ..lineTo(fLTop.x, fLTop.y)
+      ..lineTo(fLBase.x, fLBase.y)
+      ..lineTo(nLBase.x, nLBase.y)
+      ..close();
+    final Path rightSideWall = Path()
+      ..moveTo(nR.x, nR.y)
+      ..lineTo(fRTop.x, fRTop.y)
+      ..lineTo(fRBase.x, fRBase.y)
+      ..lineTo(nRBase.x, nRBase.y)
+      ..close();
     final Path frontWall = Path()
       ..moveTo(fLTop.x, fLTop.y)
       ..lineTo(fRTop.x, fRTop.y)
       ..lineTo(fRBase.x, fRBase.y)
       ..lineTo(fLBase.x, fLBase.y)
       ..close();
-    canvas.drawPath(frontWall, Paint()..color = const Color(0xFF3A2618));
+    canvas.drawPath(leftSideWall, Paint()..color = wallColor);
+    canvas.drawPath(rightSideWall, Paint()..color = wallColor);
+    canvas.drawPath(frontWall, Paint()..color = wallColor);
 
-    // Inclined snow & crimson-trimmed launch deck
+    // 3. Inclined Launch Deck shaded by Size Tier (`small` Cyan/Snow, `medium` Blossom Gold, `large` Royal Crimson/Gold)
+    final List<Color> deckColors = switch (ramp.sizeTier) {
+      SkiRampSizeTier.small => const <Color>[
+          Color(0xFFFFFFFF),
+          Color(0xFFE1F5FE),
+          Color(0xFF4FC3F7),
+        ],
+      SkiRampSizeTier.medium => const <Color>[
+          Color(0xFFFFFFFF),
+          Color(0xFFFFF3E0),
+          Color(0xFFFFD54F),
+        ],
+      SkiRampSizeTier.large => const <Color>[
+          Color(0xFFFFF8E1),
+          Color(0xFFFFD54F),
+          Color(0xFFFF5252),
+        ],
+    };
+
     final Path deck = Path()
       ..moveTo(nL.x, nL.y)
       ..lineTo(nR.x, nR.y)
@@ -1070,8 +1522,8 @@ class Ski3DPainter extends CustomPainter {
         ..shader = ui.Gradient.linear(
           Offset(nL.x, nL.y),
           Offset(fLTop.x, fLTop.y),
-          const <Color>[Color(0xFFFFFFFF), Color(0xFFFFF3E0), Color(0xFFFFD54F)],
-          const <double>[0.0, 0.72, 1.0],
+          deckColors,
+          const <double>[0.0, 0.65, 1.0],
         ),
     );
     canvas.drawPath(
@@ -1079,43 +1531,103 @@ class Ski3DPainter extends CustomPainter {
       Paint()
         ..color = _kOutline
         ..style = PaintingStyle.stroke
-        ..strokeWidth = (nL.scale * 0.11).clamp(1.2, 2.8),
+        ..strokeWidth = (nL.scale * 0.11).clamp(1.2, 3.0),
     );
 
-    // Crimson & 24K Gold launch lip bar
+    // 4. Launch Lip Bar
+    final Color lipColor = isSmall
+        ? const Color(0xFF0288D1)
+        : (isLarge ? const Color(0xFFFFD700) : const Color(0xFF8B1E24));
     canvas.drawLine(
       Offset(fLTop.x, fLTop.y),
       Offset(fRTop.x, fRTop.y),
       Paint()
-        ..color = const Color(0xFF8B1E24)
-        ..strokeWidth = (fLTop.scale * 0.28).clamp(2.0, 6.5)
+        ..color = lipColor
+        ..strokeWidth =
+            (fLTop.scale * (isLarge ? 0.36 : 0.26)).clamp(2.0, 8.0)
         ..strokeCap = StrokeCap.round,
     );
 
-    // Animated golden boost chevrons along the ramp deck
+    // 5. Animated Boost Chevrons (`2` on small, `3` on medium, `4` double luminous chevrons on large!)
+    final int chevronCount = isSmall ? 2 : (isLarge ? 4 : 3);
     final double pulse = (engine.ambientTime * 3.2) % 1.0;
-    for (int c = 0; c < 3; c++) {
-      final double u = ((c / 3.0) + pulse * 0.33) % 1.0;
+    final Color chevColor = isSmall
+        ? const Color(0xFF00B0FF)
+        : (isLarge ? const Color(0xFFFF1744) : const Color(0xFFFFB300));
+    for (int c = 0; c < chevronCount; c++) {
+      final double u =
+          ((c / chevronCount) + pulse * (1.0 / chevronCount)) % 1.0;
       final double cz = zNearRamp + (zFarRamp - zNearRamp) * u;
-      final double cy = ramp.heightMeters * u + 0.06;
-      final _ProjectedPoint3D mid = project(ramp.x, cy + 0.14, cz + 0.7);
+      final double cy =
+          nearClippedY + (ramp.heightMeters - nearClippedY) * u + 0.05;
+      final _ProjectedPoint3D mid = project(ramp.x, cy + 0.15, cz + 0.75);
       final _ProjectedPoint3D leftWing =
-          project(ramp.x - halfW * 0.55, cy, cz);
+          project(ramp.x - halfW * 0.62, cy, cz);
       final _ProjectedPoint3D rightWing =
-          project(ramp.x + halfW * 0.55, cy, cz);
+          project(ramp.x + halfW * 0.62, cy, cz);
       final Path chev = Path()
         ..moveTo(leftWing.x, leftWing.y)
         ..lineTo(mid.x, mid.y)
         ..lineTo(rightWing.x, rightWing.y);
+      if (isLarge) {
+        canvas.drawPath(
+          chev,
+          Paint()
+            ..color = const Color(0xFFFFD700)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = (mid.scale * 0.32).clamp(2.4, 6.8)
+            ..strokeCap = StrokeCap.round
+            ..strokeJoin = StrokeJoin.round,
+        );
+      }
       canvas.drawPath(
         chev,
         Paint()
-          ..color = const Color(0xFFFFB300)
+          ..color = chevColor
           ..style = PaintingStyle.stroke
           ..strokeWidth = (mid.scale * 0.18).clamp(1.5, 4.2)
           ..strokeCap = StrokeCap.round
           ..strokeJoin = StrokeJoin.round,
       );
+    }
+
+    // 6. Twin Fluttering Summit Pennants on `large` Big Air Mega-Ramp!
+    if (isLarge && fLTop.scale > 1.1) {
+      for (final (double px, double dir) in <(double, double)>[
+        (ramp.x - halfW, -1.0),
+        (ramp.x + halfW, 1.0),
+      ]) {
+        final _ProjectedPoint3D pBase =
+            project(px, ramp.heightMeters, zFarRamp);
+        final _ProjectedPoint3D pTip =
+            project(px, ramp.heightMeters + 2.05, zFarRamp);
+        canvas.drawLine(
+          Offset(pBase.x, pBase.y),
+          Offset(pTip.x, pTip.y),
+          Paint()
+            ..color = const Color(0xFFFFD700)
+            ..strokeWidth = (pBase.scale * 0.12).clamp(1.3, 3.4)
+            ..strokeCap = StrokeCap.round,
+        );
+        final double wave =
+            math.sin(engine.ambientTime * 7.0 + px) * pTip.scale * 0.18;
+        final Path flag = Path()
+          ..moveTo(pTip.x, pTip.y)
+          ..lineTo(
+            pTip.x + dir * pTip.scale * 1.15,
+            pTip.y + pTip.scale * 0.24 + wave,
+          )
+          ..lineTo(pTip.x, pTip.y + pTip.scale * 0.56)
+          ..close();
+        canvas.drawPath(flag, Paint()..color = const Color(0xFFFF1744));
+        canvas.drawPath(
+          flag,
+          Paint()
+            ..color = _kOutline
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = (pTip.scale * 0.06).clamp(0.8, 1.6),
+        );
+      }
     }
   }
 
@@ -1126,51 +1638,129 @@ class Ski3DPainter extends CustomPainter {
   ) {
     final double lx = gate.centerX - gate.halfWidth;
     final double rx = gate.centerX + gate.halfWidth;
-    final _ProjectedPoint3D lBase = project(lx, 0.0, gate.z);
-    final _ProjectedPoint3D lTop = project(lx, 2.35, gate.z);
-    final _ProjectedPoint3D rBase = project(rx, 0.0, gate.z);
-    final _ProjectedPoint3D rTop = project(rx, 2.35, gate.z);
+    final double mhL = engine.mogulElevationAt(lx, gate.z);
+    final double mhR = engine.mogulElevationAt(rx, gate.z);
 
-    if (lBase.scale < 1.0) return;
+    // Articulated spring-hinge deflection (`poleFlex` in `[0, 1]`) when Vivienne clips the gate!
+    final double flexAngle = gate.poleFlex * 0.58;
+    final double flexDx =
+        math.sin(flexAngle) * 0.85 * (gate.isLeftGate ? -1.0 : 1.0);
+    final double flexTopY = 2.45 * math.cos(flexAngle);
+    final double flexDz = math.sin(flexAngle) * 0.95;
 
-    final Color poleColor = gate.passed
+    final _ProjectedPoint3D lBase = project(lx, mhL, gate.z);
+    final _ProjectedPoint3D rBase = project(rx, mhR, gate.z);
+    if (lBase.scale < 0.95) return;
+
+    final _ProjectedPoint3D lTop = project(
+      lx + (gate.isLeftGate ? 0.0 : flexDx),
+      mhL + (gate.isLeftGate ? 2.45 : flexTopY),
+      gate.z + (gate.isLeftGate ? 0.0 : flexDz),
+    );
+    final _ProjectedPoint3D rTop = project(
+      rx + (gate.isLeftGate ? flexDx : 0.0),
+      mhR + (gate.isLeftGate ? flexTopY : 2.45),
+      gate.z + (gate.isLeftGate ? flexDz : 0.0),
+    );
+
+    final Color primaryPoleCol = gate.passed
         ? const Color(0xFF00E676)
-        : (gate.isGoldRed ? const Color(0xFF8B1E24) : const Color(0xFF1565C0));
-    final Color flagColor = gate.passed
+        : (gate.isLeftGate ? const Color(0xFFD32F2F) : const Color(0xFF1565C0));
+    final Color flagFillCol = gate.passed
         ? const Color(0xFF69F0AE)
-        : (gate.isGoldRed ? const Color(0xFFFFD700) : const Color(0xFF29B6F6));
+        : (gate.isLeftGate ? const Color(0xFFFFD700) : const Color(0xFF29B6F6));
 
-    final double pw = (lBase.scale * 0.14).clamp(1.6, 4.5);
+    // Colored snow-dye corridor line between left & right flex-poles
+    canvas.drawLine(
+      Offset(lBase.x, lBase.y),
+      Offset(rBase.x, rBase.y),
+      Paint()
+        ..color = primaryPoleCol.withValues(alpha: 0.44)
+        ..strokeWidth = (lBase.scale * 0.18).clamp(1.4, 4.4)
+        ..strokeCap = StrokeCap.round,
+    );
+
+    final double pw = (lBase.scale * 0.16).clamp(1.8, 5.2);
+    final Paint outlinePole = Paint()
+      ..color = _kOutline
+      ..strokeWidth = pw + 1.4
+      ..strokeCap = StrokeCap.round;
     final Paint polePaint = Paint()
-      ..color = poleColor
+      ..color = primaryPoleCol
       ..strokeWidth = pw
       ..strokeCap = StrokeCap.round;
 
+    canvas.drawLine(
+      Offset(lBase.x, lBase.y),
+      Offset(lTop.x, lTop.y),
+      outlinePole,
+    );
+    canvas.drawLine(
+      Offset(rBase.x, rBase.y),
+      Offset(rTop.x, rTop.y),
+      outlinePole,
+    );
     canvas.drawLine(Offset(lBase.x, lBase.y), Offset(lTop.x, lTop.y), polePaint);
     canvas.drawLine(Offset(rBase.x, rBase.y), Offset(rTop.x, rTop.y), polePaint);
 
-    // Pennant flags on both poles
-    for (final (_ProjectedPoint3D top, double dir) in <(_ProjectedPoint3D, double)>[
-      (lTop, 1.0),
-      (rTop, -1.0),
+    // Articulated spring-hinge rubber base boots (`flex-poles`)
+    for (final _ProjectedPoint3D b in <_ProjectedPoint3D>[lBase, rBase]) {
+      canvas.drawCircle(
+        Offset(b.x, b.y),
+        (b.scale * 0.16).clamp(1.5, 4.2),
+        Paint()..color = const Color(0xFF263238),
+      );
+    }
+
+    // Numbered Gate Pennants (`GAUCHE` Red/Gold vs `DROITE` Blue/Azure)
+    for (final (_ProjectedPoint3D top, double dir, bool showNum)
+        in <(_ProjectedPoint3D, double, bool)>[
+      (lTop, 1.0, gate.isLeftGate),
+      (rTop, -1.0, !gate.isLeftGate),
     ]) {
+      final double fw = top.scale * 1.02;
+      final double fh = top.scale * 0.64;
       final Rect flagRect = Rect.fromLTWH(
-        dir > 0 ? top.x : top.x - top.scale * 0.85,
-        top.y + top.scale * 0.12,
-        top.scale * 0.85,
-        top.scale * 0.56,
+        dir > 0 ? top.x : top.x - fw,
+        top.y + top.scale * 0.08,
+        fw,
+        fh,
       );
+      final RRect flagRRect =
+          RRect.fromRectAndRadius(flagRect, Radius.circular(top.scale * 0.10));
+      canvas.drawRRect(flagRRect, Paint()..color = flagFillCol);
       canvas.drawRRect(
-        RRect.fromRectAndRadius(flagRect, Radius.circular(top.scale * 0.08)),
-        Paint()..color = flagColor,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(flagRect, Radius.circular(top.scale * 0.08)),
+        flagRRect,
         Paint()
           ..color = _kOutline
           ..style = PaintingStyle.stroke
-          ..strokeWidth = (top.scale * 0.06).clamp(0.8, 1.8),
+          ..strokeWidth = (top.scale * 0.07).clamp(0.9, 2.0),
       );
+
+      if (showNum && top.scale >= 3.2) {
+        final String sideInitial = gate.isLeftGate ? 'G' : 'D';
+        final TextPainter tp = TextPainter(
+          text: TextSpan(
+            text: '$sideInitial${gate.gateNumber}',
+            style: TextStyle(
+              color: gate.isLeftGate
+                  ? const Color(0xFF4E1208)
+                  : const Color(0xFF062142),
+              fontSize: (top.scale * 0.34).clamp(7.5, 14.0),
+              fontWeight: FontWeight.w900,
+              height: 1.0,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(
+          canvas,
+          Offset(
+            flagRect.center.dx - tp.width * 0.5,
+            flagRect.center.dy - tp.height * 0.5,
+          ),
+        );
+      }
     }
   }
 
@@ -2020,7 +2610,7 @@ class Ski3DPainter extends CustomPainter {
     );
   }
 
-  /// Festive Fluttering Multi-Color Pennant Mast & Cheering Supporter (`SkiPropKind.flutteringPennantPost`)
+  /// Festive Fluttering Multi-Color Pennant Mast & 3D Vivienne Supporter (`SkiPropKind.flutteringPennantPost`)
   void _paintFlutteringPennantAndSupporter3D(
     Canvas canvas,
     SkiWorldProp3D prop,
@@ -2031,7 +2621,8 @@ class Ski3DPainter extends CustomPainter {
     final double s = base.scale;
     if (s < 0.95) return;
 
-    final double dir = prop.x < engine.trackCenterOffsetX(prop.z) ? -1.0 : 1.0;
+    final bool isLeft = prop.x < engine.trackCenterOffsetX(prop.z);
+    final double dir = isLeft ? -1.0 : 1.0;
 
     // Tall white/gold mast
     canvas.drawLine(
@@ -2071,7 +2662,10 @@ class Ski3DPainter extends CustomPainter {
         )
         ..lineTo(top.x, yAnchor + s * 0.56)
         ..close();
-      canvas.drawPath(flag, Paint()..color = colors[(prop.variant + f) % colors.length]);
+      canvas.drawPath(
+        flag,
+        Paint()..color = colors[(prop.variant + f) % colors.length],
+      );
       canvas.drawPath(
         flag,
         Paint()
@@ -2081,60 +2675,55 @@ class Ski3DPainter extends CustomPainter {
       );
     }
 
-    // Bouncing Cartoon Alpine Supporter cheering next to the mast!
-    final double hop =
-        math.sin(engine.ambientTime * 5.8 + prop.id).abs() * s * 0.35;
-    final Offset supBase = Offset(base.x + dir * s * 0.95, base.y - hop);
-    final Color jacketColor = prop.variant.isEven
-        ? const Color(0xFFFF6D00)
-        : const Color(0xFF00B0FF);
+    // Authentic 3D Volumetric Vivienne Spectator cheering beside the pennant mast!
+    final VivienneSkiEdition edition = prop.spectatorEdition ??
+        VivienneSkiEdition.values[prop.variant % VivienneSkiEdition.values.length];
+    final VivienneSpectatorCheerStyle cheerStyle = prop.spectatorCheerStyle ??
+        VivienneSpectatorCheerStyle
+            .values[(prop.variant + 1) % VivienneSpectatorCheerStyle.values.length];
+    final _ProjectedPoint3D supAnchor =
+        project(prop.x - dir * 0.85, 0.0, prop.z);
+    Vivienne3DVolumetricRig.paintSpectatorOnSlope(
+      canvas: canvas,
+      edition: edition,
+      cheerStyle: cheerStyle,
+      soleAnchorScreen: Offset(supAnchor.x, supAnchor.y),
+      unitScalePx: supAnchor.scale,
+      timeSeconds: engine.ambientTime + prop.id * 0.41,
+      isLeftOfTrack: isLeft,
+      scaleMultiplier: 0.94,
+      yawVariant: prop.variant,
+    );
+  }
 
-    // Puffer jacket body
-    final RRect torso = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: supBase + Offset(0, -s * 0.68),
-        width: s * 0.72,
-        height: s * 0.88,
-      ),
-      Radius.circular(s * 0.24),
-    );
-    canvas.drawRRect(torso, Paint()..color = jacketColor);
-    canvas.drawRRect(
-      torso,
-      Paint()
-        ..color = _kOutline
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = (s * 0.07).clamp(0.9, 2.0),
-    );
-    // Raised cheering arms
-    final Paint armP = Paint()
-      ..color = jacketColor
-      ..strokeWidth = (s * 0.16).clamp(1.2, 3.6)
-      ..strokeCap = StrokeCap.round;
-    canvas.drawLine(
-      supBase + Offset(-s * 0.28, -s * 0.85),
-      supBase + Offset(-s * 0.62, -s * 1.45),
-      armP,
-    );
-    canvas.drawLine(
-      supBase + Offset(s * 0.28, -s * 0.85),
-      supBase + Offset(s * 0.62, -s * 1.45),
-      armP,
-    );
-    // Head & pom-pom beanie
-    final Offset supHead = supBase + Offset(0, -s * 1.30);
-    canvas.drawCircle(supHead, s * 0.26, Paint()..color = const Color(0xFFFFCCBC));
-    canvas.drawArc(
-      Rect.fromCircle(center: supHead, radius: s * 0.28),
-      math.pi,
-      math.pi,
-      true,
-      Paint()..color = const Color(0xFFD50000),
-    );
-    canvas.drawCircle(
-      supHead + Offset(0, -s * 0.34),
-      s * 0.11,
-      Paint()..color = Colors.white,
+  /// Dedicated 3D Volumetric Vivienne Spectator (`SkiPropKind.vivienneSpectator`, `v1.4.0`)
+  /// using all 3 `BLENDER_LAB` models (`speedyV03`, `wonderland`, `giantDenim`)
+  /// waving V-arms and jumping with two feet along both piste borders!
+  void _paintVivienneSpectator3D(
+    Canvas canvas,
+    SkiWorldProp3D prop,
+    _ProjectedPoint3D Function(double x, double y, double z) project,
+  ) {
+    final _ProjectedPoint3D base = project(prop.x, 0.0, prop.z);
+    if (base.scale < 2.8) return;
+
+    final bool isLeft = prop.x < engine.trackCenterOffsetX(prop.z);
+    final VivienneSkiEdition edition = prop.spectatorEdition ??
+        VivienneSkiEdition.values[prop.variant % VivienneSkiEdition.values.length];
+    final VivienneSpectatorCheerStyle cheerStyle = prop.spectatorCheerStyle ??
+        VivienneSpectatorCheerStyle
+            .values[prop.variant % VivienneSpectatorCheerStyle.values.length];
+
+    Vivienne3DVolumetricRig.paintSpectatorOnSlope(
+      canvas: canvas,
+      edition: edition,
+      cheerStyle: cheerStyle,
+      soleAnchorScreen: Offset(base.x, base.y),
+      unitScalePx: base.scale,
+      timeSeconds: engine.ambientTime + prop.id * 0.37,
+      isLeftOfTrack: isLeft,
+      scaleMultiplier: prop.scale,
+      yawVariant: prop.variant,
     );
   }
 

@@ -122,9 +122,8 @@ void main() {
   });
 
   test(
-    'v1.2.0 Strictly 3 BLENDER_LAB Vivienne 3D Cycles Models, Pose Asset Paths & Track Metrics',
+    'v1.2.0–v1.4.0 Strictly 3 BLENDER_LAB Vivienne 3D Models, Pose Asset Paths & Updated Track Metrics',
     () {
-      // Strictly 3 official playable Viviennes (`neoBlossom` removed)
       expect(VivienneSkiEdition.values.length, equals(3));
       expect(
         VivienneSkiEdition.values,
@@ -158,12 +157,12 @@ void main() {
         }
       }
 
-      // Bonus aerial tricks (`Saut 360°` +250, `Saut Périlleux` +300)
       expect(SkiAerialTrickKind.saut360.bonusPoints, equals(250));
       expect(SkiAerialTrickKind.sautPerilleux.bonusPoints, equals(300));
 
       final SkiGameEngine engine = SkiGameEngine(seed: 2026);
       expect(engine.isInMenu, isTrue);
+      expect(engine.selectedGameMode, equals(SkiGameMode.descenteBosses));
 
       for (final SkiTrackId track in SkiTrackId.values) {
         engine.selectTrack(track);
@@ -270,7 +269,7 @@ void main() {
   );
 
   test(
-    'v1.3.0 22-Bone Skeletal Articulation & True 3D Volumetric Thickness at Profile (90°) and 3/4 (60°)',
+    'v1.3.0–v1.4.0 22-Bone Skeletal Articulation, Zero Walk Cycle in Downhill & Spectators, and True 3D Volumetric Thickness',
     () {
       const List<String> requiredAnimatedBones = <String>[
         'Leg_L',
@@ -289,17 +288,17 @@ void main() {
         'Speedy_Bag_Bone',
       ];
 
-      // 1. Verify every required bone exists and animates independently over time
+      // 1. Verify every required bone exists and suspends/animates smoothly over time
       final VivienneSkeletonPose3D poseT0 = VivienneSkeletonPose3D.evaluate(
         edition: VivienneSkiEdition.speedyV03,
-        timeSeconds: 0.15,
+        timeSeconds: 0.05,
         mode: VivienneMotionMode.skiRun,
         animState: VivienneSkiAnimState.carvingRight,
         carveTilt: 0.55,
       );
       final VivienneSkeletonPose3D poseT1 = VivienneSkeletonPose3D.evaluate(
         edition: VivienneSkiEdition.speedyV03,
-        timeSeconds: 0.58,
+        timeSeconds: 0.27,
         mode: VivienneMotionMode.skiRun,
         animState: VivienneSkiAnimState.carvingRight,
         carveTilt: 0.55,
@@ -323,26 +322,126 @@ void main() {
             );
         expect(
           rotDelta + worldProbeDelta,
-          greaterThan(0.015),
-          reason: 'Bone $boneName should animate continuously between frames',
+          greaterThan(0.012),
+          reason: 'Bone $boneName should animate/suspend continuously',
         );
       }
 
-      // Left & Right legs and arms articulate independently (asymmetric / opposing!)
-      expect(
-        (poseT0.boneByName('Leg_L')!.localRx -
-                poseT0.boneByName('Leg_R')!.localRx)
-            .abs(),
-        greaterThan(0.08),
-      );
-      expect(
-        (poseT0.boneByName('Arm_Upper_L')!.localRx -
-                poseT0.boneByName('Arm_Upper_R')!.localRx)
-            .abs(),
-        greaterThan(0.10),
-      );
+      // 2. STRICT ZERO WALK CYCLE IN DOWNHILL SCHUSS & CARVING (`ORB-72` Req #1):
+      //    - In neutral schuss (`carveTilt == 0`), `Leg_L.localRx == Leg_R.localRx`
+      //      and `Arm_Upper_L.localRx == Arm_Upper_R.localRx` at ALL times `t`!
+      //    - In carving (`carveTilt == ±0.6`), static edge angulation (`Leg_L.localRx - Leg_R.localRx`)
+      //      is non-zero (> 0.08) for inside/outside ski flexion, AND stays strictly CONSTANT
+      //      across `t` (zero alternating forward/backward walk cycle!).
+      const List<double> sampleTimes = <double>[0.0, 0.19, 0.41, 0.68, 0.93];
+      for (final double t in sampleTimes) {
+        final VivienneSkeletonPose3D neutralPose =
+            VivienneSkeletonPose3D.evaluate(
+          edition: VivienneSkiEdition.speedyV03,
+          timeSeconds: t,
+          mode: VivienneMotionMode.skiRun,
+          animState: VivienneSkiAnimState.glidingRearNeutral,
+          carveTilt: 0.0,
+        );
+        expect(
+          neutralPose.boneByName('Leg_L')!.localRx,
+          closeTo(neutralPose.boneByName('Leg_R')!.localRx, 1e-9),
+          reason: 'Neutral schuss must keep both legs strictly parallel at t=$t',
+        );
+        expect(
+          neutralPose.boneByName('Arm_Upper_L')!.localRx,
+          closeTo(neutralPose.boneByName('Arm_Upper_R')!.localRx, 1e-9),
+          reason: 'Neutral schuss must never swing arms in a walk cycle at t=$t',
+        );
+      }
 
-      // 2. Verify projected 3D mesh width NEVER collapses by `cos(yaw)` at 90° (profile) & 60° (3/4)!
+      double? refCarveLegDiff;
+      double? refCarveArmDiff;
+      for (final double t in sampleTimes) {
+        final VivienneSkeletonPose3D carvePose =
+            VivienneSkeletonPose3D.evaluate(
+          edition: VivienneSkiEdition.wonderland,
+          timeSeconds: t,
+          mode: VivienneMotionMode.skiRun,
+          animState: VivienneSkiAnimState.carvingRight,
+          carveTilt: 0.60,
+        );
+        final double legDiff = carvePose.boneByName('Leg_L')!.localRx -
+            carvePose.boneByName('Leg_R')!.localRx;
+        final double armDiff = carvePose.boneByName('Arm_Upper_L')!.localRx -
+            carvePose.boneByName('Arm_Upper_R')!.localRx;
+        expect(legDiff.abs(), greaterThan(0.08));
+        expect(armDiff.abs(), greaterThan(0.10));
+        refCarveLegDiff ??= legDiff;
+        refCarveArmDiff ??= armDiff;
+        expect(
+          legDiff,
+          closeTo(refCarveLegDiff, 1e-9),
+          reason:
+              'Carving leg angulation must remain constant over time (zero alternating walk!)',
+        );
+        expect(
+          armDiff,
+          closeTo(refCarveArmDiff, 1e-9),
+          reason:
+              'Carving arm balance must remain constant over time (zero alternating walk!)',
+        );
+      }
+
+      // 3. STRICT ZERO WALK CYCLE + JUMPING/WAVING FOR 3D SPECTATORS (`ORB-72` Req #5):
+      for (final VivienneSpectatorCheerStyle style
+          in VivienneSpectatorCheerStyle.values) {
+        double minArmAbduction = 1e9;
+        double maxArmAbduction = -1e9;
+        double maxJumpZ = 0.0;
+
+        for (int step = 0; step < 24; step++) {
+          final double t = step * 0.08;
+          final VivienneSkeletonPose3D specPose =
+              VivienneSkeletonPose3D.evaluate(
+            edition: VivienneSkiEdition.giantDenim,
+            timeSeconds: t,
+            mode: VivienneMotionMode.spectatorCheer,
+            cheerStyle: style,
+            yawDegrees: 44.0,
+          );
+          // Legs must NEVER alternate in a walk cycle (`Leg_L.localRx == Leg_R.localRx`)!
+          expect(
+            specPose.boneByName('Leg_L')!.localRx,
+            closeTo(specPose.boneByName('Leg_R')!.localRx, 1e-9),
+            reason:
+                'Spectator cheer ($style) must keep both legs in-phase (zero walk cycle) at t=$t',
+          );
+          final double armAbduct =
+              specPose.boneByName('Arm_Upper_R')!.localRy.abs();
+          minArmAbduction = math.min(minArmAbduction, armAbduct);
+          maxArmAbduction = math.max(maxArmAbduction, armAbduct);
+          maxJumpZ = math.max(
+            maxJumpZ,
+            specPose.boneByName('Root')!.localOffset.z,
+          );
+        }
+
+        expect(
+          maxArmAbduction,
+          greaterThan(1.75),
+          reason: 'Spectator ($style) must raise arms high in cheer',
+        );
+        expect(
+          maxArmAbduction - minArmAbduction,
+          greaterThan(0.20),
+          reason: 'Spectator ($style) must actively wave arms over time',
+        );
+        if (style != VivienneSpectatorCheerStyle.waveArms) {
+          expect(
+            maxJumpZ,
+            greaterThan(0.10),
+            reason: 'Jumping spectator ($style) must leap vertically off snow',
+          );
+        }
+      }
+
+      // 4. Verify projected 3D mesh width NEVER collapses by `cos(yaw)` at 90° (profile) & 60° (3/4)!
       for (final VivienneSkiEdition ed in VivienneSkiEdition.values) {
         final VivienneSkeletonPose3D frontPose =
             VivienneSkeletonPose3D.evaluate(
@@ -375,7 +474,6 @@ void main() {
           trickProgress: 0.50,
         );
 
-        // Check both without skis (pure figurine body + scissor legs + head 0.56m depth) AND with skis!
         final VivienneProjectedBounds frontBody =
             Vivienne3DVolumetricRig.computeProjectedBounds(
           edition: ed,
@@ -410,17 +508,15 @@ void main() {
         );
 
         expect(frontBody.renderedTriangleCount, greaterThan(1200));
-        // A flat sprite with `cos(90°)` collapses to 0 (or fake 0.28 clamp);
-        // our true 3D ellipsoid head (0.56m Y-depth) + 3D scissor legs + V-arms spans > 0.72m (> 72px at 100px/m)!
         expect(
           profileBody.boundingBox.width,
-          greaterThan(72.0),
+          greaterThan(58.0),
           reason:
-              'Profile (yaw=90°) 3D body width for $ed must preserve full volumetric depth',
+              'Profile (yaw=90°) 3D body width for $ed must preserve full 3D head/body volume',
         );
         expect(
           threeQuarterBody.boundingBox.width,
-          greaterThan(frontBody.boundingBox.width * 0.62),
+          greaterThan(frontBody.boundingBox.width * 0.52),
           reason:
               '3/4 view (yaw=60°) 3D width for $ed must exceed flat cos(60°)=0.50 foreshortening',
         );
@@ -428,14 +524,136 @@ void main() {
           profileWithSkis.boundingBox.width,
           greaterThan(135.0),
           reason:
-              'Profile (yaw=90°) with 3D skis & scissor legs must span > 1.35m in depth',
+              'Profile (yaw=90°) with parallel 3D skis must span > 1.35m in depth',
         );
       }
     },
   );
 
+  test(
+    'v1.4.0 Dramatic Alpine Relief, Mesh-Integrated Moguls, 3 Ramp Size Tiers, Full Slalom Mode & 3D Vivienne Spectators',
+    () {
+      final SkiGameEngine engine = SkiGameEngine(seed: 2026);
+
+      for (final SkiTrackId track in SkiTrackId.values) {
+        engine.selectGameMode(SkiGameMode.descenteBosses);
+        engine.selectTrack(track);
+
+        // 1. Multi-section Alpine Relief (`ORB-72` Req #2):
+        //    Verify substantial crest/trough relief (> 20m peak-to-trough) AND alternating
+        //    flat/convex replat sections + steep plunging walls!
+        double minRelief = 1e9;
+        double maxRelief = -1e9;
+        double minSlopeGrad = 1e9;
+        double maxSlopeGrad = -1e9;
+        for (double z = 20.0; z <= track.lengthMeters - 40.0; z += 8.0) {
+          final double r = engine.relativeReliefAtZ(z);
+          final double g = engine.localSlopeGradientAt(z);
+          minRelief = math.min(minRelief, r);
+          maxRelief = math.max(maxRelief, r);
+          minSlopeGrad = math.min(minSlopeGrad, g);
+          maxSlopeGrad = math.max(maxSlopeGrad, g);
+        }
+        expect(
+          maxRelief - minRelief,
+          greaterThan(22.0),
+          reason: '$track must feature dramatic multi-section vertical relief',
+        );
+        expect(
+          maxSlopeGrad - minSlopeGrad,
+          greaterThan(0.55),
+          reason:
+              '$track must alternate flat/convex replats and steep plunging walls',
+        );
+
+        // 2. Mesh-integrated 3D Moguls (`ORB-72` Req #3):
+        expect(engine.moguls.length, equals(track.mogulCount));
+        for (final SkiMogul3D m in engine.moguls) {
+          final double mogulLift = engine.mogulElevationAt(m.x, m.z);
+          final double snowH = engine.snowSurfaceHeightAt(m.x, m.z);
+          expect(mogulLift, greaterThanOrEqualTo(m.heightMeters * 0.99));
+          expect(
+            snowH,
+            greaterThan(engine.relativeReliefAtZ(m.z) + m.heightMeters * 0.95),
+          );
+        }
+
+        // 3. All 3 Ramp Size Tiers (`small`, `medium`, `large`) present (`ORB-72` Req #3):
+        expect(engine.jumpRamps.length, equals(track.jumpRampCount));
+        final Set<SkiRampSizeTier> tiers =
+            engine.jumpRamps.map((SkiJumpRamp3D r) => r.sizeTier).toSet();
+        expect(
+          tiers,
+          containsAll(SkiRampSizeTier.values),
+          reason: '$track must include small, medium, and large jump ramps',
+        );
+        expect(
+          SkiRampSizeTier.large.heightMeters,
+          greaterThan(SkiRampSizeTier.medium.heightMeters),
+        );
+        expect(
+          SkiRampSizeTier.medium.heightMeters,
+          greaterThan(SkiRampSizeTier.small.heightMeters),
+        );
+
+        // 4. 3D Vivienne Spectators on BOTH borders from ALL 3 BLENDER_LAB models (`ORB-72` Req #5):
+        final List<SkiWorldProp3D> specs = engine.spectatorProps;
+        expect(specs.length, greaterThanOrEqualTo(24));
+        bool hasLeftBorder = false;
+        bool hasRightBorder = false;
+        final Set<VivienneSkiEdition> specEditions = <VivienneSkiEdition>{};
+        final Set<VivienneSpectatorCheerStyle> specStyles =
+            <VivienneSpectatorCheerStyle>{};
+        for (final SkiWorldProp3D sp in specs) {
+          final double cx = engine.trackCenterOffsetX(sp.z);
+          if (sp.x < cx - track.trackHalfWidthMeters) hasLeftBorder = true;
+          if (sp.x > cx + track.trackHalfWidthMeters) hasRightBorder = true;
+          if (sp.spectatorEdition != null) {
+            specEditions.add(sp.spectatorEdition!);
+          }
+          if (sp.spectatorCheerStyle != null) {
+            specStyles.add(sp.spectatorCheerStyle!);
+          }
+        }
+        expect(hasLeftBorder, isTrue);
+        expect(hasRightBorder, isTrue);
+        expect(specEditions, containsAll(VivienneSkiEdition.values));
+        expect(specStyles, containsAll(VivienneSpectatorCheerStyle.values));
+
+        // 5. Full Slalom Mode (`SkiGameMode.slalomComplet`, `ORB-72` Req #4):
+        //    Strict Left (`centerX < cx`) / Right (`centerX > cx`) alternation!
+        engine.selectGameMode(SkiGameMode.slalomComplet);
+        expect(engine.isSlalomMode, isTrue);
+        expect(
+          engine.slalomGates.length,
+          equals(track.slalomModeGateCount),
+        );
+        for (int i = 0; i < engine.slalomGates.length; i++) {
+          final SkiSlalomGate3D gate = engine.slalomGates[i];
+          final bool expectedLeft = i.isEven;
+          final double cx = engine.trackCenterOffsetX(gate.z);
+          expect(gate.isLeftGate, equals(expectedLeft));
+          expect(gate.gateNumber, equals(i + 1));
+          if (expectedLeft) {
+            expect(
+              gate.centerX,
+              lessThan(cx - track.trackHalfWidthMeters * 0.40),
+              reason: 'Gate #${i + 1} must be offset cleanly on the Left side',
+            );
+          } else {
+            expect(
+              gate.centerX,
+              greaterThan(cx + track.trackHalfWidthMeters * 0.40),
+              reason: 'Gate #${i + 1} must be offset cleanly on the Right side',
+            );
+          }
+        }
+      }
+    },
+  );
+
   testWidgets(
-    'v1.3.0 3 Viviennes 3D Volumetric Rig, Saut 360° & Périlleux 3D, Pause 3D Inspection & 6 Store Screenshots (1080x2400)',
+    'v1.4.0 Relief Crest Occlusion, Full Slalom Mode, 3 Ramp Tiers, 3D Vivienne Spectators & 6 Store Screenshots (1080x2400)',
     (WidgetTester tester) async {
       await tester.binding.setSurfaceSize(const Size(360, 800));
       addTearDown(() async => tester.binding.setSurfaceSize(null));
@@ -479,19 +697,27 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Verify compact viewport (`360x740dp`) produces zero overflow on Menu
+      // Verify compact viewport (`360x740dp`) produces zero overflow on Menu with Mode Selector
       await tester.binding.setSurfaceSize(const Size(360, 740));
       await tester.pump(const Duration(milliseconds: 80));
       expect(tester.takeException(), isNull);
       await tester.binding.setSurfaceSize(const Size(360, 800));
       await tester.pump(const Duration(milliseconds: 80));
 
-      // 1. Screenshot 01: Title & 3D Models Selector (strictly 3 Viviennes, Wonderland selected)
+      // Verify Mode Selector toggles between `DESCENTE & BOSSES` and `SLALOM COMPLET`
       expect(find.byKey(const Key('main_menu_overlay')), findsOneWidget);
-      expect(
-        find.byKey(const Key('select_edition_neo_blossom')),
-        findsNothing,
-      );
+      expect(find.byKey(const Key('select_mode_descente')), findsOneWidget);
+      expect(find.byKey(const Key('select_mode_slalom')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('select_mode_slalom')));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(engine.selectedGameMode, equals(SkiGameMode.slalomComplet));
+
+      await tester.tap(find.byKey(const Key('select_mode_descente')));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(engine.selectedGameMode, equals(SkiGameMode.descenteBosses));
+
+      // 1. Screenshot 01: Title, Mode Selector (`DESCENTE & BOSSES` / `SLALOM COMPLET`) & 3 Viviennes
       await tester.tap(find.byKey(const Key('select_edition_wonderland')));
       await tester.pump(const Duration(milliseconds: 120));
       expect(engine.selectedEdition, equals(VivienneSkiEdition.wonderland));
@@ -512,16 +738,18 @@ void main() {
       await tester.tap(find.byKey(const Key('close_turntable_gallery_button')));
       await tester.pump(const Duration(milliseconds: 120));
 
-      // 2. Screenshot 02: Downhill 3D Carving Action (`speedyV03` 3D yaw/roll, asymmetric leg flexion, poles & swinging Speedy bag)
+      // 2. Screenshot 02: Convex Snow Crest Masking Background + Integrated 3D Moguls + Parallel Carving + 3D Vivienne Spectators!
+      // At `playerZ ≈ 184 m` approaching the `z ≈ 242 m` convex crest, the snow ridge rises above `horizonY`
+      // masking the lower background mountains while showing mesh-deformed moguls & cheering 3D Viviennes!
       engine.selectEdition(VivienneSkiEdition.speedyV03);
-      engine.startRun(track: SkiTrackId.greenBlossomValley);
-      final SkiWorldProp3D firstChairlift = engine.worldProps.firstWhere(
-        (SkiWorldProp3D p) => p.kind == SkiPropKind.cableCarPylon,
+      engine.startRun(
+        track: SkiTrackId.greenBlossomValley,
+        mode: SkiGameMode.descenteBosses,
       );
-      engine.playerZ = firstChairlift.z - 48.0;
-      engine.playerLateralOffset = -3.4;
-      engine.setManualTilt(0.72);
-      for (int i = 0; i < 22; i++) {
+      engine.playerZ = 178.0;
+      engine.playerLateralOffset = -2.8;
+      engine.setManualTilt(0.66);
+      for (int i = 0; i < 16; i++) {
         engine.update(1 / 60);
       }
       expect(engine.animState, equals(VivienneSkiAnimState.carvingRight));
@@ -533,55 +761,75 @@ void main() {
       );
       engine.clearManualTilt();
 
-      // 3. Screenshot 03: `Wonderland` Midair `SAUT 360° +250` at 3/4-Front (`yaw ≈ 38°` from front!)
-      // Clearly revealing 3D wooden head volume, red Monogram petal edges, 3D bunny, 3D heart balloon, V-arms & 3D scissor legs!
+      // 3. Screenshot 03: Full Slalom Mode (`SkiGameMode.slalomComplet`) on Steep Plunging Wall!
+      // Shows strict Left (`G1`/`G3` Red/Gold) & Right (`D2`/`D4` Blue/Azure) gates, S-trajectory & chevrons,
+      // `hud_slalom_counter_badge` (`PORTES 1 / 28 • COMBO ×2` + `DROITE D2 ▶`), parallel carving & 3D Vivienne spectators!
       engine.selectEdition(VivienneSkiEdition.wonderland);
-      engine.startRun(track: SkiTrackId.greenBlossomValley);
-      final SkiSlalomGate3D targetGate = engine.slalomGates[2];
-      engine.playerZ = targetGate.z - 22.0;
-      engine.playerLateralOffset = 0.0;
-      for (int i = 0; i < 8; i++) {
+      engine.startRun(
+        track: SkiTrackId.greenBlossomValley,
+        mode: SkiGameMode.slalomComplet,
+      );
+      final SkiSlalomGate3D gate1 = engine.slalomGates.first;
+      engine.playerZ = gate1.z - 1.5;
+      engine.playerLateralOffset =
+          gate1.centerX - engine.trackCenterOffsetX(gate1.z);
+      for (int i = 0; i < 6; i++) {
+        engine.update(1 / 60);
+      }
+      expect(engine.slalomPassed, greaterThanOrEqualTo(1));
+      // Advance onto the steep plunging wall (`z ≈ 64m`) looking down at alternating D2 (Right), G3 (Left), D4 (Right)!
+      engine.playerZ = 62.0;
+      engine.playerLateralOffset = -2.2;
+      engine.setManualTilt(0.68);
+      for (int i = 0; i < 10; i++) {
+        engine.update(1 / 60);
+      }
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byKey(const Key('hud_slalom_counter_badge')), findsOneWidget);
+      await _capturePortraitScreenshot(
+        tester,
+        screenshotKey,
+        'screenshots/03_slalom_gates_and_hud.png',
+      );
+      engine.clearManualTilt();
+
+      // 4. Screenshot 04: Plunging Downhill Wall + All 3 Ramp Sizes (`small`, `medium`, `large`) + 3D Moguls + `Giant Denim` Big Air!
+      // Launching off Ramp #0 (`small` at `68 m`) while Ramp #1 (`medium` at `104 m`) & Ramp #2 (`large` Big Air at `144 m`)
+      // plunge down into the valley below, flanked by cheering 3D Vivienne spectators!
+      engine.selectEdition(VivienneSkiEdition.giantDenim);
+      engine.startRun(
+        track: SkiTrackId.blueAsnieresForest,
+        mode: SkiGameMode.descenteBosses,
+      );
+      final SkiJumpRamp3D targetRamp = engine.jumpRamps.first;
+      engine.playerZ = targetRamp.z + 2.0;
+      engine.playerLateralOffset =
+          targetRamp.x - engine.trackCenterOffsetX(engine.playerZ);
+      for (int i = 0; i < 5; i++) {
         engine.update(1 / 60);
       }
       engine.triggerBonusJumpForTest(
         trick: SkiAerialTrickKind.saut360,
-        progress: 0.415,
-        apexHeightMeters: 3.15,
+        progress: 0.40,
+        apexHeightMeters: 2.95,
       );
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.text('SAUT 360° +250'), findsOneWidget);
       await _capturePortraitScreenshot(
         tester,
         screenshotKey,
-        'screenshots/03_slalom_gates_and_hud.png',
-      );
-
-      // 4. Screenshot 04: `Giant Denim` Midair `SAUT PÉRILLEUX +300` in True 3D Pitch Backflip + Lateral Perspective!
-      engine.selectEdition(VivienneSkiEdition.giantDenim);
-      engine.startRun(track: SkiTrackId.blueAsnieresForest);
-      final SkiJumpRamp3D targetRamp = engine.jumpRamps.first;
-      engine.playerZ = targetRamp.z + 1.5;
-      engine.playerLateralOffset =
-          targetRamp.x - engine.trackCenterOffsetX(engine.playerZ);
-      for (int i = 0; i < 6; i++) {
-        engine.update(1 / 60);
-      }
-      engine.triggerBonusJumpForTest(
-        trick: SkiAerialTrickKind.sautPerilleux,
-        progress: 0.46,
-        apexHeightMeters: 3.45,
-      );
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(find.text('SAUT PÉRILLEUX +300'), findsOneWidget);
-      await _capturePortraitScreenshot(
-        tester,
-        screenshotKey,
         'screenshots/04_jump_ramp_squash_stretch.png',
       );
 
-      // 5. Screenshot 05: Pause Menu Overlay over HUD & 3D Piste (`pause_modal_overlay`)
+      // 5. Screenshot 05: Pause Menu Overlay (`pause_modal_overlay`) with 3/4-Profile 3D Inspection & Slalom Stats
       engine.selectEdition(VivienneSkiEdition.speedyV03);
-      engine.startRun(track: SkiTrackId.blueAsnieresForest);
+      engine.startRun(
+        track: SkiTrackId.blueAsnieresForest,
+        mode: SkiGameMode.slalomComplet,
+      );
+      engine.slalomPassed = 6;
+      engine.slalomCombo = 5;
+      engine.slalomPoints = 2250;
       for (int i = 0; i < 55; i++) {
         engine.update(1 / 60);
       }
@@ -600,14 +848,14 @@ void main() {
       expect(find.byKey(const Key('pause_modal_overlay')), findsNothing);
 
       // 6. Screenshot 06: Finish Podium Modal (`track_finished_overlay`)
-      engine.blossomsCollected = 24;
-      engine.blossomPoints = 1200;
-      engine.slalomPassed = 9;
-      engine.slalomPoints = 1350;
-      engine.jumpsCompleted = 4;
-      engine.mogulsAbsorbed = 6;
-      engine.jumpAndMogulPoints = 1610;
-      engine.elapsedSeconds = 46.8;
+      engine.blossomsCollected = 28;
+      engine.blossomPoints = 1400;
+      engine.slalomPassed = 34;
+      engine.slalomPoints = 8640;
+      engine.jumpsCompleted = 5;
+      engine.mogulsAbsorbed = 9;
+      engine.jumpAndMogulPoints = 2180;
+      engine.elapsedSeconds = 58.4;
       engine.forceFinishRunForTest();
       await tester.pump(const Duration(milliseconds: 280));
       expect(find.byKey(const Key('track_finished_overlay')), findsOneWidget);

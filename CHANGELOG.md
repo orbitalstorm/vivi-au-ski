@@ -1,5 +1,23 @@
 # Changelog — Vivi au Ski 3D (`cloud.orbital8.vivi_au_ski`)
 
+## [v1.4.0] (`1.4.0+5`) - 2026-11-12
+
+### Added, Changed & Fixed
+- **Suppression Totale du Cycle de Marche en Descente & sur les Modes Hors-Glisse (`ORB-72` / `ORB-71` — @Carbon)** :
+  - Élimination intégrale de l'alternance longitudinale avant/arrière des jambes (`rhythmLeg = 0.0`) et du balancement de marche des bras (`poleSwing = 0.0`, `stride = 0.0`) dans `VivienneSkeletonPose3D.evaluate` (`lib/painters/vivienne_3d_volumetric_rig.dart`) en glisse (`glidingRearNeutral`, `carvingLeft`, `carvingRight`), en saut, dans le Menu (`showcase360`), en Pause (`pauseInspection`), sur le Podium (`podiumCelebration`) et chez les spectateurs (`spectatorCheer`).
+  - Remplacement par une vraie posture de ski alpin **parallèle** : suspension synchrone des deux genoux/chevilles sur le terrain, angulation de carre asymétrique intérieure/extérieure en virage sans cisaillement longitudinal, et bras aérodynamiques profilés tenant les bâtons vers l'arrière.
+- **Relief Alpin Prononcé Multi-Sections : Replats / Crêtes Occultant l'Arrière-Plan & Murs Plongeants (`lib/engine/ski_game_engine.dart`, `lib/painters/ski_3d_painter.dart`)** :
+  - Profil altimétrique asymétrique multi-sections (`relativeReliefAtZ`, `localReliefGradientAt`, `localSlopeGradientAt`) alternant des **replats et dômes convexes** qui remontent visuellement **au-dessus de `horizonY`** (masquant le bas des montagnes alpines, le ciel et les acteurs 3D situés derrière la cassure de pente) et des **murs de descente plongeants** révélant toute la vallée en contrebas avec accélération physique réelle.
+  - Tri Z unifié entre les tranches 3D du maillage de neige (`_DepthActorKind.terrainSlice`) et l'ensemble des acteurs 3D avec élimination des faces arrière derrière les crêtes (*back-face crest culling*).
+- **Bosses 3D Intégrées dans le Maillage de Piste (`22 / 34 / 48`) & 3 Tailles de Tremplins (`SkiRampSizeTier`)** :
+  - Subdivision transversale du maillage 3D de la piste en `10` colonnes déformées continûment (`C¹`) par `mogulElevationAt(worldX, worldZ)` / `snowSurfaceHeightAt(worldX, worldZ)` avec rainures de neige damée courbées en 3D et ombrage par facette.
+  - Ajout de `SkiRampSizeTier` (`small` Mini Tremplin `4.5×6.8×1.05 m`, `medium` Tremplin Blossom `5.8×10.2×1.80 m`, `large` Méga Tremplin Big Air `7.4×14.6×2.80 m` à contreforts de neige 3D et fanions sommitaux) générés sur chaque piste (`6`, `9`, `12` tremplins).
+- **Mode `SLALOM COMPLET` (`SkiGameMode.slalomComplet`) & Alternance Stricte Gauche / Droite** :
+  - Sélecteur de mode dans le Menu d'accueil (`select_mode_descente` / `select_mode_slalom`) et parcours Slalom dédié (`28`, `38`, `50` portes alternant strictement **Gauche Rouge/Or** `G1, G3...` à `-0.45..0.49 * halfW` et **Droite Bleu/Azur** `D2, D4...` à `+0.45..0.49 * halfW`).
+  - Ligne de trajectoire idéale 3D en S et chevrons directionnels peints sur le relief de la neige, piquets articulés sur rotules flexibles (`poleFlex`) s'inclinant au passage, et compteur HUD temps réel (`hud_slalom_counter_badge` : `PORTES X / TOTAL • COMBO ×Y` + indicateur prochaine porte Gauche/Droite).
+- **Spectateurs 3D Vivienne Animés sur les Bords de Piste (`SkiPropKind.vivienneSpectator`)** :
+  - Foule festive sur les deux bordures de piste composée des **3 modèles 3D officiels `BLENDER_LAB`** (`speedyV03`, `wonderland`, `giantDenim`, sans skis ni bâtons, orientés de 3/4 face vers la piste) avec 3 styles d'encouragement sans aucun cycle de marche (`waveArms`, `jumpAndWave`, `doubleJumpCheer`), cache de poses FK et LOD par distance garantissant `60–120 FPS`.
+
 ## [v1.3.0] (`1.3.0+4`) - 2026-11-12
 
 ### Added, Changed & Fixed

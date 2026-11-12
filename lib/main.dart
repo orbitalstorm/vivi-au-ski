@@ -714,16 +714,17 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
 
   Widget _buildMainMenuOverlay() {
     final VivienneSkiEdition activeEdition = _engine.selectedEdition;
+    final SkiGameMode activeMode = _engine.selectedGameMode;
     final double menuPreviewYaw =
         34.0 + math.sin(_engine.ambientTime * 1.15) * 24.0;
 
     return Container(
       key: const Key('main_menu_overlay'),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
       child: Center(
         child: SingleChildScrollView(
           child: Container(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
             decoration: BoxDecoration(
               color: const Color(0xF5FFF8E7),
               borderRadius: BorderRadius.circular(28),
@@ -739,14 +740,14 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                const _CartoonSnowCapDecoration(height: 13),
-                const SizedBox(height: 4),
+                const _CartoonSnowCapDecoration(height: 11),
+                const SizedBox(height: 3),
 
                 // Header Banner with Specular Shine
                 Container(
                   width: double.infinity,
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       begin: Alignment.topCenter,
@@ -774,18 +775,18 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                         'VIVI AU SKI 3D',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 22,
+                          fontSize: 21,
                           fontWeight: FontWeight.w900,
                           color: Colors.white,
                           letterSpacing: 0.8,
                         ),
                       ),
-                      SizedBox(height: 2),
+                      SizedBox(height: 1),
                       Text(
-                        'DESCENTE ROYALE v1.3 • VRAI RENDU 3D VOLUMÉTRIQUE',
+                        'DESCENTE ROYALE v1.4 • RELIEF 3D & SLALOM COMPLET',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 9.8,
+                          fontSize: 9.6,
                           fontWeight: FontWeight.w800,
                           color: Color(0xFFFFF59D),
                         ),
@@ -793,12 +794,12 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                     ],
                   ),
                 ),
-                const SizedBox(height: 7),
+                const SizedBox(height: 6),
 
                 // Live 60 FPS Real-Time 3D Volumetric Preview + 3 Official BLENDER_LAB Models Selector
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: <Color>[Color(0xFFE1F5FE), Color(0xFFFFF9C4)],
@@ -814,8 +815,8 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                       Row(
                         children: <Widget>[
                           Container(
-                            width: 68,
-                            height: 68,
+                            width: 62,
+                            height: 62,
                             decoration: BoxDecoration(
                               gradient: const RadialGradient(
                                 colors: <Color>[
@@ -857,7 +858,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                                   activeEdition.name,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                    fontSize: 12.6,
+                                    fontSize: 12.4,
                                     fontWeight: FontWeight.w900,
                                     color: Color(0xFF2B1105),
                                   ),
@@ -866,7 +867,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                                   activeEdition.subtitle,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                    fontSize: 9.8,
+                                    fontSize: 9.6,
                                     fontWeight: FontWeight.w800,
                                     color: Color(0xFF1638E8),
                                   ),
@@ -875,7 +876,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                                   activeEdition.perkLabel,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                    fontSize: 9.8,
+                                    fontSize: 9.6,
                                     fontWeight: FontWeight.w800,
                                     color: Color(0xFF8B1E24),
                                   ),
@@ -885,7 +886,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                           ),
                         ],
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 5),
                       Row(
                         children: VivienneSkiEdition.values
                             .map((VivienneSkiEdition ed) {
@@ -910,7 +911,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                                   duration: const Duration(milliseconds: 140),
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 3,
-                                    vertical: 5,
+                                    vertical: 4,
                                   ),
                                   decoration: BoxDecoration(
                                     color: selected
@@ -926,8 +927,8 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                                     mainAxisSize: MainAxisSize.min,
                                     children: <Widget>[
                                       SizedBox(
-                                        width: 30,
-                                        height: 30,
+                                        width: 28,
+                                        height: 28,
                                         child: Vivienne3DViewport(
                                           edition: ed,
                                           yawDegrees: 32.0,
@@ -945,7 +946,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                                         textAlign: TextAlign.center,
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
-                                          fontSize: 9.6,
+                                          fontSize: 9.5,
                                           fontWeight: FontWeight.w900,
                                           color: Color(0xFF2B1105),
                                         ),
@@ -961,42 +962,52 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                     ],
                   ),
                 ),
-                const SizedBox(height: 7),
+                const SizedBox(height: 6),
+
+                // Game Mode Selector (`DESCENTE & BOSSES` vs `SLALOM COMPLET`)
+                _buildGameModeSelector(activeMode),
+                const SizedBox(height: 6),
 
                 // 3 Ski Tracks Selection Cards
                 for (final SkiTrackId track in SkiTrackId.values) ...<Widget>[
                   _buildTrackCard(track),
-                  const SizedBox(height: 7),
+                  const SizedBox(height: 5),
                 ],
 
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
 
-                // Primary Play Button: DÉVALER LA PISTE !
+                // Primary Play Button: DÉVALER LA PISTE ! / LANCER LE SLALOM !
                 SizedBox(
                   width: double.infinity,
                   child: JuicySki3DButton(
                     key: const Key('start_ski_run_button'),
-                    backgroundColor: const Color(0xFF00E676),
-                    lipColor: const Color(0xFF008E46),
+                    backgroundColor: activeMode == SkiGameMode.slalomComplet
+                        ? const Color(0xFFFFAB00)
+                        : const Color(0xFF00E676),
+                    lipColor: activeMode == SkiGameMode.slalomComplet
+                        ? const Color(0xFFB26A00)
+                        : const Color(0xFF008E46),
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 11,
+                      horizontal: 14,
+                      vertical: 10,
                     ),
                     onTap: () => _engine.startRun(),
-                    child: const Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: <Widget>[
-                        SkiCartoonEmblemBadge(
+                        const SkiCartoonEmblemBadge(
                           kind: SkiCartoonEmblemKind.playSkiTriangle,
-                          size: 26,
+                          size: 24,
                         ),
-                        SizedBox(width: 10),
+                        const SizedBox(width: 9),
                         Flexible(
                           child: Text(
-                            'DÉVALER LA PISTE !',
+                            activeMode == SkiGameMode.slalomComplet
+                                ? 'LANCER LE SLALOM !'
+                                : 'DÉVALER LA PISTE !',
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 17.5,
+                            style: const TextStyle(
+                              fontSize: 17.0,
                               fontWeight: FontWeight.w900,
                               color: Color(0xFF2B1105),
                             ),
@@ -1006,7 +1017,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                     ),
                   ),
                 ),
-                const SizedBox(height: 9),
+                const SizedBox(height: 8),
 
                 // Secondary Action Row: TABLEAU DES SCORES & GALERIE VIVIENNE 3D
                 Row(
@@ -1018,7 +1029,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                         lipColor: const Color(0xFFB26A00),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 6,
-                          vertical: 9,
+                          vertical: 8,
                         ),
                         onTap: () => _engine.openHighscores(),
                         child: const Row(
@@ -1026,7 +1037,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                           children: <Widget>[
                             SkiCartoonEmblemBadge(
                               kind: SkiCartoonEmblemKind.skiTrophyCup,
-                              size: 22,
+                              size: 21,
                             ),
                             SizedBox(width: 5),
                             Flexible(
@@ -1034,7 +1045,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                                 'TABLEAU SCORES',
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  fontSize: 11.5,
+                                  fontSize: 11.2,
                                   fontWeight: FontWeight.w900,
                                   color: Color(0xFF2B1105),
                                 ),
@@ -1052,7 +1063,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                         lipColor: const Color(0xFF0277BD),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 6,
-                          vertical: 9,
+                          vertical: 8,
                         ),
                         onTap: () => _engine.openTurntableGallery(),
                         child: const Row(
@@ -1060,7 +1071,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                           children: <Widget>[
                             SkiCartoonEmblemBadge(
                               kind: SkiCartoonEmblemKind.turntableGallery,
-                              size: 22,
+                              size: 21,
                             ),
                             SizedBox(width: 5),
                             Flexible(
@@ -1068,7 +1079,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                                 'GALERIE 3D',
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  fontSize: 11.5,
+                                  fontSize: 11.2,
                                   fontWeight: FontWeight.w900,
                                   color: Color(0xFF2B1105),
                                 ),
@@ -1088,9 +1099,107 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
     );
   }
 
+  Widget _buildGameModeSelector(SkiGameMode activeMode) {
+    return Row(
+      children: SkiGameMode.values.map((SkiGameMode mode) {
+        final bool isSelected = activeMode == mode;
+        final bool isSlalom = mode == SkiGameMode.slalomComplet;
+        final Color activeBg = isSlalom
+            ? const Color(0xFFFFD54F)
+            : const Color(0xFF80D8FF);
+        final Color activeLip = isSlalom
+            ? const Color(0xFFB26A00)
+            : const Color(0xFF0277BD);
+
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(
+              right: isSlalom ? 0 : 4,
+              left: isSlalom ? 4 : 0,
+            ),
+            child: GestureDetector(
+              key: Key(mode.selectKeyName),
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                _engine.selectGameMode(mode);
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isSelected ? activeBg : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0xFF2B1105),
+                    width: isSelected ? 2.5 : 1.7,
+                  ),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: isSelected ? activeLip : const Color(0x22000000),
+                      blurRadius: 0,
+                      offset: Offset(0, isSelected ? 3 : 1.5),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Icon(
+                      isSlalom
+                          ? Icons.tour_rounded
+                          : Icons.landscape_rounded,
+                      size: 16,
+                      color: isSlalom
+                          ? const Color(0xFFC62828)
+                          : const Color(0xFF01579B),
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            mode.title,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 10.0,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF2B1105),
+                            ),
+                          ),
+                          Text(
+                            isSlalom
+                                ? 'Portes G/D • Combos'
+                                : 'Bosses & 3 Tremplins',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 8.5,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF5D4037),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   Widget _buildTrackCard(SkiTrackId track) {
     final bool isSelected = _engine.selectedTrack == track;
     final int best = _engine.bestScoreForTrack(track);
+    final String metricsLabel = _engine.isSlalomMode
+        ? '${track.lengthMeters.round()} m • ${track.slalomModeGateCount} Portes G/D • ${track.mogulCount} Bosses'
+        : track.summaryMetrics;
 
     return GestureDetector(
       key: Key(track.selectKeyName),
@@ -1101,25 +1210,25 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFFFFF3C4) : Colors.white,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: const Color(0xFF2B1105),
-            width: isSelected ? 3.0 : 2.0,
+            width: isSelected ? 2.8 : 2.0,
           ),
           boxShadow: <BoxShadow>[
             BoxShadow(
               color: isSelected ? track.badgeLipColor : const Color(0x26000000),
               blurRadius: 0,
-              offset: Offset(0, isSelected ? 4 : 2),
+              offset: Offset(0, isSelected ? 3.5 : 2),
             ),
           ],
         ),
         child: Row(
           children: <Widget>[
-            SkiCartoonEmblemBadge(kind: _emblemForTrack(track), size: 36),
+            SkiCartoonEmblemBadge(kind: _emblemForTrack(track), size: 34),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
@@ -1133,7 +1242,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                           track.difficultyLabel,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 9.8,
+                            fontSize: 9.6,
                             fontWeight: FontWeight.w900,
                             color: track.badgeLipColor,
                           ),
@@ -1151,7 +1260,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                         child: Text(
                           '$best pts',
                           style: const TextStyle(
-                            fontSize: 10.0,
+                            fontSize: 9.8,
                             fontWeight: FontWeight.w900,
                             color: Color(0xFFFFD700),
                           ),
@@ -1163,16 +1272,16 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                     track.title,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 13.2,
+                      fontSize: 12.8,
                       fontWeight: FontWeight.w900,
                       color: Color(0xFF2B1105),
                     ),
                   ),
                   Text(
-                    track.summaryMetrics,
+                    metricsLabel,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 9.4,
+                      fontSize: 9.2,
                       fontWeight: FontWeight.w800,
                       color: Color(0xFF5D4037),
                     ),
@@ -1452,6 +1561,11 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                   ],
                 ),
               ),
+              if (_engine.isSlalomMode &&
+                  _engine.slalomGates.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 6),
+                _buildSlalomHudCounterBadge(),
+              ],
             ],
           ),
 
@@ -1630,6 +1744,109 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSlalomHudCounterBadge() {
+    final SkiSlalomGate3D? nextGate = _engine.nextUpcomingSlalomGate;
+    final bool isLeft = nextGate?.isLeftGate ?? true;
+    final Color gateAccent = nextGate == null
+        ? const Color(0xFF00E676)
+        : (isLeft ? const Color(0xFFFF5252) : const Color(0xFF40C4FF));
+    final String nextLabel = nextGate == null
+        ? 'ARRIVÉE SLALOM !'
+        : (isLeft
+            ? 'G${nextGate.gateNumber} GAUCHE'
+            : 'DROITE D${nextGate.gateNumber}');
+
+    return Container(
+      key: const Key('hud_slalom_counter_badge'),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xEE1A1025),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFFFD700),
+          width: 1.9,
+        ),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x55000000),
+            blurRadius: 0,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          Flexible(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Icon(
+                  Icons.tour_rounded,
+                  size: 14,
+                  color: Color(0xFFFFD700),
+                ),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    'PORTES ${_engine.slalomPassed} / ${_engine.slalomGates.length} • COMBO ×${_engine.slalomCombo}',
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11.0,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: gateAccent,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: const Color(0xFF2B1105),
+                width: 1.4,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (nextGate != null && isLeft) ...<Widget>[
+                  const Icon(
+                    Icons.chevron_left_rounded,
+                    size: 13,
+                    color: Color(0xFF2B1105),
+                  ),
+                  const SizedBox(width: 1),
+                ],
+                Text(
+                  nextLabel,
+                  style: const TextStyle(
+                    fontSize: 9.8,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF2B1105),
+                  ),
+                ),
+                if (nextGate != null && !isLeft) ...<Widget>[
+                  const SizedBox(width: 1),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 13,
+                    color: Color(0xFF2B1105),
+                  ),
+                ],
+              ],
+            ),
           ),
         ],
       ),
@@ -2389,6 +2606,10 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                           '${_engine.playerZ.round()} / ${track.lengthMeters.round()} m',
                         ),
                         _buildScoreDetailRow(
+                          'Portes Slalom (${_engine.selectedGameMode.shortLabel})',
+                          '${_engine.slalomPassed} / ${_engine.slalomGates.length} • ×${_engine.slalomCombo}',
+                        ),
+                        _buildScoreDetailRow(
                           'Fleurs Blossom • Vitesse',
                           '${_engine.blossomsCollected} fl. • ${_engine.speedKmh.round()} km/h',
                         ),
@@ -2626,7 +2847,7 @@ class _ViviAuSkiHomeScreenState extends State<ViviAuSkiHomeScreen>
                             '+${b.slalomPoints} pts',
                           ),
                           _buildScoreDetailRow(
-                            'Figures de Saut & Bosses (${b.jumpsCompleted} sauts • ${b.mogulsAbsorbed} bosses)',
+                            'Sauts & Bosses (${b.jumpsCompleted} sauts • ${b.mogulsAbsorbed} bosses)',
                             '+${b.jumpAndMogulPoints} pts',
                           ),
                           _buildScoreDetailRow(

@@ -257,6 +257,7 @@ enum VivienneMotionMode {
   showcase360,
   podiumCelebration,
   pauseInspection,
+  spectatorCheer,
 }
 
 class VivienneSkeletonPose3D {
@@ -268,13 +269,15 @@ class VivienneSkeletonPose3D {
   });
 
   /// Evaluates the full 22+ bone skeletal pose in real time (60-120 FPS)
-  /// with continuous independent articulation of legs, knees, feet, skis,
-  /// upper/lower arms, ski poles, head, 4 petals, bunny ears, and accessories.
+  /// with strict alpine parallel ski kinematics (ZERO walk cycle on downhill,
+  /// showcase, podium, or spectators!).
   factory VivienneSkeletonPose3D.evaluate({
     required VivienneSkiEdition edition,
     required double timeSeconds,
     VivienneMotionMode mode = VivienneMotionMode.skiRun,
     VivienneSkiAnimState animState = VivienneSkiAnimState.glidingRearNeutral,
+    VivienneSpectatorCheerStyle cheerStyle =
+        VivienneSpectatorCheerStyle.jumpAndWave,
     SkiAerialTrickKind aerialTrick = SkiAerialTrickKind.none,
     bool isAirborne = false,
     double yawDegrees = 180.0,
@@ -326,46 +329,142 @@ class VivienneSkeletonPose3D {
     double tagRx = 0.0, tagRy = 0.0;
     double bunnyRx = 0.0, bunnyEarsRx = 0.0, bunnyEarsRy = 0.0;
 
-    if (mode == VivienneMotionMode.showcase360 ||
-        mode == VivienneMotionMode.pauseInspection) {
-      // Lively continuous 3D showcase cycle: joyful walk/scissor kick + V-arm wave + petal bloom
-      final double w = t * 4.4;
-      final double hopCycle = 0.5 + 0.5 * math.sin(t * 2.6);
-      rootTz = math.max(0.0, math.sin(w * 2.0)) * 0.055;
+    if (mode == VivienneMotionMode.spectatorCheer) {
+      // =======================================================================
+      // 3D BORDER SPECTATOR CHEER (`waveArms`, `jumpAndWave`, `doubleJumpCheer`)
+      // STRICTLY ZERO WALK CYCLE (`legLRx == legRRx` at every instant `t`!)
+      // =======================================================================
+      final double w = t * 4.8;
+      double parallelKnee = 0.14;
 
-      final double stride =
-          mode == VivienneMotionMode.pauseInspection
-              ? 0.52
-              : math.sin(w) * 0.48;
-      // rx < 0 swings thigh forward (-Y); shinRx > 0 bends knee backward (+Y)
-      legLRx = -stride - 0.08;
-      legRRx = stride - 0.08;
-      shinLRx = math.max(0.0, stride) * 0.72 + 0.16;
-      shinRRx = math.max(0.0, -stride) * 0.72 + 0.16;
+      switch (cheerStyle) {
+        case VivienneSpectatorCheerStyle.waveArms:
+          // Standing on parallel feet with gentle rhythmic knee bounce & wide V-arm waving!
+          final double bounce = 0.5 + 0.5 * math.sin(w);
+          rootTz = math.max(0.0, math.sin(w)) * 0.035;
+          parallelKnee = 0.12 + (1.0 - bounce) * 0.12;
+
+          final double wave = math.sin(w * 1.35);
+          armUpLRy = -2.18 + wave * 0.36;
+          armUpRRy = 2.18 + wave * 0.36;
+          armUpLRx = -0.18 + math.cos(w * 1.35) * 0.08;
+          armUpRRx = -0.18 - math.cos(w * 1.35) * 0.08;
+          armLoLRy = -0.22 + wave * 0.24;
+          armLoRRy = 0.22 + wave * 0.24;
+          armLoLRx = -0.24;
+          armLoRRx = -0.24;
+
+          pelvisRy = wave * 0.08;
+          spineRz = wave * 0.12;
+          headRy = wave * 0.14;
+          headRz = math.cos(w * 0.7) * 0.10;
+        case VivienneSpectatorCheerStyle.jumpAndWave:
+          // Joyful vertical two-footed jumps (`rootTz > 0`) + high V-arms waving!
+          final double jumpWave = math.sin(w);
+          final double airPhase = math.max(0.0, jumpWave);
+          final double crouchPhase = math.max(0.0, -jumpWave);
+          rootTz = airPhase * 0.22;
+          rootScaleZ = (1.0 + airPhase * 0.07 - crouchPhase * 0.08).clamp(0.86, 1.12);
+          rootScaleXY = 1.0 / math.sqrt(rootScaleZ);
+          parallelKnee = 0.14 + crouchPhase * 0.42 - airPhase * 0.06;
+
+          final double wave = math.sin(w * 1.6);
+          armUpLRy = -1.75 - airPhase * 0.58 + wave * 0.24;
+          armUpRRy = 1.75 + airPhase * 0.58 + wave * 0.24;
+          armUpLRx = -0.22;
+          armUpRRx = -0.22;
+          armLoLRy = -0.20 + wave * 0.18;
+          armLoRRy = 0.20 + wave * 0.18;
+          armLoLRx = -0.26;
+          armLoRRx = -0.26;
+
+          spineRx = airPhase * 0.10 - crouchPhase * 0.10;
+          headRx = airPhase * 0.08;
+          headRy = wave * 0.10;
+        case VivienneSpectatorCheerStyle.doubleJumpCheer:
+          // Energetic double two-footed hops + rhythmic overhead applause / cheers!
+          final double hopFast = math.sin(w * 1.45).abs();
+          final double cadence = 0.5 + 0.5 * math.sin(w * 0.725);
+          rootTz = hopFast * (0.08 + 0.12 * cadence);
+          parallelKnee = 0.15 + (1.0 - hopFast) * 0.28;
+
+          final double clap = math.sin(w * 2.1);
+          armUpLRy = -1.96 - clap * 0.34;
+          armUpRRy = 1.96 + clap * 0.34;
+          armUpLRx = -0.34 - clap * 0.12;
+          armUpRRx = -0.34 - clap * 0.12;
+          armLoLRy = 0.16 + clap * 0.26;
+          armLoRRy = -0.16 - clap * 0.26;
+          armLoLRx = -0.38;
+          armLoRRx = -0.38;
+
+          spineRx = 0.06;
+          headRz = math.sin(w * 1.05) * 0.14;
+          headRx = 0.06 + hopFast * 0.06;
+      }
+
+      // Strictly symmetric two-footed stance & jump flexion (ZERO walk cycle!)
+      legLRx = -parallelKnee;
+      legRRx = -parallelKnee;
+      shinLRx = parallelKnee * 1.48;
+      shinRRx = parallelKnee * 1.48;
       footLRx = -(legLRx + shinLRx) * 0.42;
       footRRx = -(legRRx + shinRRx) * 0.42;
-      legLRy = -0.09;
-      legRRy = 0.09;
+      legLRy = -0.08;
+      legRRy = 0.08;
 
-      pelvisRz = math.sin(w) * 0.12;
+      // Festive 4-petal bloom & accessory bounce
+      petalTopRx = -0.18 - math.sin(w * 1.5) * 0.09;
+      petalBottomRx = -0.22 - math.cos(w * 1.5) * 0.08;
+      petalLeftRy = -0.18 - math.sin(w * 1.5 + 0.8) * 0.09;
+      petalRightRy = 0.18 + math.sin(w * 1.5 + 1.6) * 0.09;
+
+      bagRy = -0.28 - math.sin(w * 1.5) * 0.24;
+      bagRx = math.cos(w * 1.2) * 0.18;
+      tagRy = 0.26 + math.cos(w * 1.6) * 0.22;
+      bunnyRx = math.sin(w * 1.8) * 0.08;
+      bunnyEarsRx = -0.18 + math.sin(w * 2.2) * 0.24;
+    } else if (mode == VivienneMotionMode.showcase360 ||
+        mode == VivienneMotionMode.pauseInspection) {
+      // Lively 3D studio showcase & pause inspection: ZERO walk cycle (`stride = 0`),
+      // joined/parallel feet with gentle two-footed bounce + V-arm wave + petal bloom!
+      final double w = t * 4.0;
+      final double hopRaw = math.sin(t * 2.6);
+      final double hopUp = math.max(0.0, hopRaw);
+      final double hopCrouch = math.max(0.0, -hopRaw);
+      rootTz = mode == VivienneMotionMode.pauseInspection ? 0.02 : hopUp * 0.055;
+
+      final double parallelKnee = mode == VivienneMotionMode.pauseInspection
+          ? 0.20
+          : (0.14 + hopCrouch * 0.22 - hopUp * 0.05);
+      legLRx = -parallelKnee;
+      legRRx = -parallelKnee;
+      shinLRx = parallelKnee * 1.45;
+      shinRRx = parallelKnee * 1.45;
+      footLRx = -(legLRx + shinLRx) * 0.42;
+      footRRx = -(legRRx + shinRRx) * 0.42;
+      legLRy = -0.08;
+      legRRy = 0.08;
+
+      pelvisRz = math.sin(w * 0.5) * 0.06;
       spineRz = -pelvisRz * 0.85;
-      headRy = math.sin(w * 0.5) * 0.11;
-      headRz = math.cos(w * 0.5) * 0.14;
-      headRx = math.sin(w) * 0.07;
+      headRy = math.sin(w * 0.5) * 0.10;
+      headRz = math.cos(w * 0.5) * 0.12;
+      headRx = math.sin(w) * 0.05;
 
-      // Joyful alternating swing + periodic celebratory V-arms raise!
-      // ry < 0 lifts Arm_Upper_L (+X) outward & high into a V; ry > 0 lifts Arm_Upper_R (-X)!
+      // Joyful celebratory V-arms wave (no walk arm swing!)
       final double vLift = mode == VivienneMotionMode.pauseInspection
           ? 0.72
-          : (0.32 + 0.58 * hopCycle);
-      armUpLRy = -0.34 - vLift * 1.72 - math.sin(w * 1.5) * 0.16;
-      armUpRRy = 0.34 + vLift * 1.72 + math.cos(w * 1.5) * 0.16;
-      armUpLRx = stride * 0.45 - vLift * 0.22;
-      armUpRRx = -stride * 0.45 - vLift * 0.22;
-      armLoLRx = -0.36 - math.sin(w * 2.0) * 0.20;
-      armLoRRx = -0.36 + math.sin(w * 2.0) * 0.20;
-      poleLRx = 0.28 + math.cos(w) * 0.18;
-      poleRRx = 0.28 - math.cos(w) * 0.18;
+          : (0.36 + 0.54 * (0.5 + 0.5 * hopRaw));
+      final double waveSway = math.sin(w * 1.25) * 0.16;
+      armUpLRy = -0.36 - vLift * 1.68 + waveSway;
+      armUpRRy = 0.36 + vLift * 1.68 + waveSway;
+      armUpLRx = -0.18 - vLift * 0.16;
+      armUpRRx = -0.18 - vLift * 0.16;
+      armLoLRx = -0.34 - math.cos(w * 1.25) * 0.10;
+      armLoRRx = -0.34 - math.cos(w * 1.25) * 0.10;
+      poleLRx = 0.30;
+      poleRRx = 0.30;
 
       // Expressive 4-petal bloom & wave (Petal_Bottom rx < 0 drapes forward -Y)
       petalTopRx = -0.14 - math.sin(w * 1.3) * 0.10;
@@ -373,81 +472,85 @@ class VivienneSkeletonPose3D {
       petalLeftRy = -0.14 - math.sin(w * 1.3 + 0.9) * 0.11;
       petalRightRy = 0.14 + math.sin(w * 1.3 + 1.8) * 0.11;
 
-      bagRy = -0.22 - math.sin(w * 1.4) * 0.26;
-      bagRx = math.cos(w * 1.1) * 0.22;
-      tagRy = 0.22 + math.cos(w * 1.8) * 0.26;
-      tagRx = math.sin(w * 1.9) * 0.24;
+      bagRy = -0.22 - math.sin(w * 1.4) * 0.24;
+      bagRx = math.cos(w * 1.1) * 0.18;
+      tagRy = 0.22 + math.cos(w * 1.8) * 0.22;
+      tagRx = math.sin(w * 1.9) * 0.18;
       bunnyRx = math.sin(w * 2.0) * 0.08;
       bunnyEarsRx = -0.14 + math.sin(w * 2.4 - 0.5) * 0.22;
       bunnyEarsRy = math.cos(w * 1.2) * 0.10;
     } else if (mode == VivienneMotionMode.podiumCelebration) {
-      // Triumphant Chalet Podium Celebration: high V-arms, joyful hop & scissor kicks
-      final double w = t * 5.2;
-      rootTz = math.sin(w).abs() * 0.09;
-      pelvisRz = math.sin(w) * 0.16;
-      spineRx = 0.08;
-      headRz = math.sin(w * 0.5) * 0.18;
-      headRy = math.cos(w) * 0.10;
+      // Triumphant Chalet Podium Celebration: two-footed victory jumps (ZERO walk cycle!) & V-arms
+      final double w = t * 4.8;
+      final double jumpSine = math.sin(w);
+      final double jumpUp = math.max(0.0, jumpSine);
+      final double crouchDown = math.max(0.0, -jumpSine);
+      rootTz = jumpUp * 0.11;
+      rootScaleZ = (1.0 + jumpUp * 0.05 - crouchDown * 0.06).clamp(0.88, 1.10);
+      rootScaleXY = 1.0 / math.sqrt(rootScaleZ);
 
-      armUpLRy = -2.28 - math.sin(w * 2.0) * 0.18;
-      armUpRRy = 2.28 + math.sin(w * 2.0 + 0.6) * 0.18;
+      pelvisRz = math.sin(w * 0.5) * 0.10;
+      spineRx = 0.08 * jumpUp - 0.06 * crouchDown;
+      headRz = math.sin(w * 0.5) * 0.15;
+      headRy = math.cos(w * 0.5) * 0.08;
+
+      final double wave = math.sin(w * 1.6) * 0.20;
+      armUpLRy = -2.24 + wave;
+      armUpRRy = 2.24 + wave;
       armUpLRx = -0.22;
       armUpRRx = -0.22;
-      armLoLRy = -0.24 - math.sin(w * 2.5) * 0.16;
-      armLoRRy = 0.24 + math.cos(w * 2.5) * 0.16;
+      armLoLRy = -0.22 + wave * 0.7;
+      armLoRRy = 0.22 + wave * 0.7;
 
-      legLRx = -math.sin(w) * 0.38 - 0.10;
-      legRRx = math.sin(w) * 0.38 - 0.10;
-      legLRy = -0.14;
-      legRRy = 0.14;
-      shinLRx = 0.24;
-      shinRRx = 0.24;
+      final double symKnee = 0.15 + crouchDown * 0.36 - jumpUp * 0.07;
+      legLRx = -symKnee;
+      legRRx = -symKnee;
+      legLRy = -0.10;
+      legRRy = 0.10;
+      shinLRx = symKnee * 1.48;
+      shinRRx = symKnee * 1.48;
+      footLRx = -(legLRx + shinLRx) * 0.40;
+      footRRx = -(legRRx + shinRRx) * 0.40;
 
       petalTopRx = -0.20 - math.sin(w * 2.0) * 0.08;
       petalBottomRx = -0.24 - math.cos(w * 2.0) * 0.08;
       petalLeftRy = -0.20 - math.sin(w * 2.0) * 0.08;
       petalRightRy = 0.20 + math.sin(w * 2.0) * 0.08;
 
-      bagRy = -0.32 - math.sin(w * 1.8) * 0.28;
-      bunnyEarsRx = -0.16 + math.sin(w * 2.6) * 0.26;
+      bagRy = -0.32 - math.sin(w * 1.8) * 0.26;
+      bunnyEarsRx = -0.16 + math.sin(w * 2.4) * 0.24;
     } else if (isAirborne && aerialTrick == SkiAerialTrickKind.saut360) {
       // =======================================================================
       // SAUT 360°: True 360° 3D vertical-axis spin (NEVER horizontally squished!),
-      // high celebratory V-arms, wide 3D scissor-kicking legs + skis, blooming petals!
+      // high celebratory V-arms, athletic parallel tucked skis, blooming petals!
       // =======================================================================
       final double spinPhase = trickProgress * math.pi * 6.0 + t * 7.5;
       rootScaleZ = 1.06;
       rootScaleXY = 1.0 / math.sqrt(rootScaleZ);
 
-      // Wide 3D aerial scissor kick: Leg_L forward (-Y) while Leg_R kicks back (+Y)!
-      final double rawScissor = math.sin(spinPhase * 0.85 + 0.35);
-      final double scissor = rawScissor.abs() < 0.55
-          ? (rawScissor >= 0 ? 0.68 : -0.68)
-          : rawScissor;
-      const double scissorAmp = 0.64;
-      legLRx = -scissor * scissorAmp - 0.08;
-      legRRx = scissor * scissorAmp - 0.08;
-      legLRy = -0.18;
-      legRRy = 0.18;
-      shinLRx = 0.30 + math.max(0.0, scissor) * 0.34;
-      shinRRx = 0.30 + math.max(0.0, -scissor) * 0.34;
-      footLRx = -0.10;
-      footRRx = -0.10;
+      final double airTuck = 0.28 + 0.10 * math.sin(trickProgress * math.pi);
+      legLRx = -airTuck;
+      legRRx = -airTuck;
+      legLRy = -0.12;
+      legRRy = 0.12;
+      shinLRx = airTuck * 1.45;
+      shinRRx = airTuck * 1.45;
+      footLRx = -0.12;
+      footRRx = -0.12;
 
       // Both arms raised high in a triumphant 3D V!
       armUpLRy = -2.32 - math.sin(spinPhase) * 0.15;
       armUpRRy = 2.32 + math.cos(spinPhase) * 0.15;
-      armUpLRx = -0.24 + math.cos(spinPhase) * 0.12;
-      armUpRRx = -0.24 - math.cos(spinPhase) * 0.12;
+      armUpLRx = -0.24 + math.cos(spinPhase) * 0.10;
+      armUpRRx = -0.24 + math.cos(spinPhase) * 0.10;
       armLoLRy = -0.24;
       armLoRRy = 0.24;
-      armLoLRx = -0.20 + math.sin(spinPhase * 1.3) * 0.14;
-      armLoRRx = -0.20 - math.sin(spinPhase * 1.3) * 0.14;
-      poleLRx = 0.35;
-      poleRRx = 0.35;
+      armLoLRx = -0.20 + math.sin(spinPhase * 1.3) * 0.12;
+      armLoRRx = -0.20 + math.sin(spinPhase * 1.3) * 0.12;
+      poleLRx = 0.42;
+      poleRRx = 0.42;
 
-      // Expressive torso counter-twist & head look
-      pelvisRz = scissor * 0.16;
+      pelvisRz = math.sin(spinPhase) * 0.10;
       spineRx = 0.08;
       headRx = 0.06;
       headRy = math.sin(spinPhase * 0.5) * 0.10;
@@ -458,41 +561,39 @@ class VivienneSkeletonPose3D {
       petalLeftRy = -0.24 - math.sin(spinPhase + 0.8) * 0.08;
       petalRightRy = 0.24 + math.sin(spinPhase + 1.6) * 0.08;
 
-      // Centrifugal 3D flare on Speedy bag / Heart balloon / Skateboard & Bunny ears
       bagRy = -0.44 - math.sin(spinPhase) * 0.22;
       bagRx = -0.16 + math.cos(spinPhase) * 0.20;
       tagRy = 0.44 + math.cos(spinPhase) * 0.20;
       bunnyEarsRx = -0.24 + math.sin(spinPhase * 1.5) * 0.24;
     } else if (isAirborne && aerialTrick == SkiAerialTrickKind.sautPerilleux) {
       // =======================================================================
-      // SAUT PÉRILLEUX: True 3D Pitch Backflip (0° -> -360° around X axis so head
-      // tips backward +Y!) + 28° 3D perspective yaw so lateral depth of sneakers,
-      // skis, skateboard and arms is unmistakably visible throughout the loop!
+      // SAUT PÉRILLEUX: True 3D Pitch Backflip (0° -> -360° around X axis)
+      // + 28° 3D perspective yaw with parallel tucked knees & skis!
       // =======================================================================
       final double flipWave = trickProgress * math.pi * 4.0 + t * 6.0;
       finalPitchRad = -finalPitchRad;
       finalYawRad += 28.0 * math.pi / 180.0;
 
-      // Athletic aerial tuck-and-scissor so both 3D sneakers & skis separate cleanly in 3D!
       final double tuck = math.sin(trickProgress * math.pi);
-      legLRx = -0.50 * tuck - 0.28 * math.sin(flipWave + 0.6);
-      legRRx = -0.50 * tuck + 0.28 * math.sin(flipWave + 0.6);
-      legLRy = -0.18;
-      legRRy = 0.18;
-      shinLRx = 0.58 * tuck + 0.18;
-      shinRRx = 0.40 * tuck + 0.18;
-      footLRx = -0.16;
-      footRRx = -0.08;
+      final double symFlipKnee = 0.26 + 0.44 * tuck;
+      legLRx = -symFlipKnee;
+      legRRx = -symFlipKnee;
+      legLRy = -0.13;
+      legRRy = 0.13;
+      shinLRx = 0.28 + 0.56 * tuck;
+      shinRRx = 0.28 + 0.56 * tuck;
+      footLRx = -0.14;
+      footRRx = -0.14;
 
-      // Dynamic wide aero-stabilizer V arms holding skateboard/poles in 3D
+      // Dynamic wide aero-stabilizer V arms in 3D
       armUpLRy = -1.96 - 0.28 * tuck;
       armUpRRy = 1.96 + 0.28 * tuck;
-      armUpLRx = -0.32;
-      armUpRRx = 0.18;
-      armLoLRx = -0.36;
-      armLoRRx = -0.30;
-      poleLRx = 0.38;
-      poleRRx = 0.28;
+      armUpLRx = -0.28;
+      armUpRRx = -0.28;
+      armLoLRx = -0.34;
+      armLoRRx = -0.34;
+      poleLRx = 0.45;
+      poleRRx = 0.45;
 
       spineRx = 0.14 * tuck;
       headRx = 0.20 * tuck;
@@ -509,7 +610,7 @@ class VivienneSkeletonPose3D {
       bunnyEarsRx = -0.36;
     } else if (animState == VivienneSkiAnimState.mogulAbsorptionSquash ||
         animState == VivienneSkiAnimState.landingImpact) {
-      // Deep 3D volume-conserving Squash (`sz = 0.80`, deep knee flexion, tucked arms, petal whip)
+      // Deep 3D volume-conserving Squash (`sz = 0.80`, deep parallel knee flexion, tucked arms)
       rootScaleZ = 0.80;
       rootScaleXY = 1.0 / math.sqrt(rootScaleZ);
       rootTz = -0.08;
@@ -537,7 +638,6 @@ class VivienneSkeletonPose3D {
       poleLRx = 0.35;
       poleRRx = 0.35;
 
-      // Overshoot aerodynamic whip on all 4 petals
       petalTopRx = 0.22;
       petalBottomRx = -0.34;
       petalLeftRy = 0.20;
@@ -547,22 +647,29 @@ class VivienneSkeletonPose3D {
     } else if (isAirborne ||
         animState == VivienneSkiAnimState.rampLaunchStretch ||
         animState == VivienneSkiAnimState.airborneCelebration) {
-      // Ramp Takeoff Stretch & Big Air Celebration
-      final double airWave = t * 6.5;
+      // Ramp Takeoff Stretch & Big Air Celebration (parallel ski posture, ZERO scissor/walk!)
+      final double airWave = t * 6.0;
       rootScaleZ = 1.12;
       rootScaleXY = 1.0 / math.sqrt(rootScaleZ);
 
-      legLRx = -0.28 * math.sin(airWave) - 0.10;
-      legRRx = 0.28 * math.sin(airWave) - 0.10;
-      legLRy = -0.12;
-      legRRy = 0.12;
-      shinLRx = 0.22;
-      shinRRx = 0.22;
+      final double airParallelFlex = 0.20 + 0.05 * math.cos(airWave);
+      legLRx = -airParallelFlex;
+      legRRx = -airParallelFlex;
+      legLRy = -0.10;
+      legRRy = 0.10;
+      shinLRx = airParallelFlex * 1.35;
+      shinRRx = airParallelFlex * 1.35;
+      footLRx = -0.08;
+      footRRx = -0.08;
 
-      armUpLRy = -2.24 - math.sin(airWave) * 0.14;
-      armUpRRy = 2.24 + math.sin(airWave) * 0.14;
+      armUpLRy = -2.22 - math.sin(airWave) * 0.14;
+      armUpRRy = 2.22 + math.sin(airWave) * 0.14;
+      armUpLRx = -0.20;
+      armUpRRx = -0.20;
       armLoLRx = -0.24;
       armLoRRx = -0.24;
+      poleLRx = 0.48;
+      poleRRx = 0.48;
 
       petalTopRx = -0.22;
       petalBottomRx = -0.24;
@@ -573,64 +680,75 @@ class VivienneSkeletonPose3D {
     } else {
       // =======================================================================
       // DOWNHILL SCHUSS & DYNAMIC 3D CARVING (`glidingRearNeutral`, `carvingLeft`, `carvingRight`)
+      // STRICTLY ZERO WALK CYCLE (`rhythmLeg = 0.0`, `poleSwing = 0.0`):
+      // Both skis & legs stay parallel longitudinally with in-phase ski suspension
+      // and aerodynamic tucked ski arms!
       // =======================================================================
       final double carve = carveTilt.clamp(-1.0, 1.0);
       final double glidePhase = t * 7.2;
 
-      // 1. True 3D Carving Yaw (`yaw = 180° - carve * 36°`) so turning exposes Vivienne's
-      // full 3D side profile, wooden head depth, red petal bevels, and swinging Speedy bag!
+      // 1. True 3D Carving Yaw (`yaw = 180° - carve * 36°`)
       finalYawRad -= carve * (36.0 * math.pi / 180.0);
       finalRollRad = rollRadians * 0.85;
 
-      // 2. Rhythmic ski suspension + asymmetric inside/outside knee & hip flexion!
-      final double pump = math.sin(glidePhase) * 0.032;
-      rootTz = -0.035 + pump - carve.abs() * 0.04;
+      // 2. Parallel In-Phase Ski Suspension (identical phase on both legs — NEVER opposing!)
+      final double suspWave = math.sin(glidePhase);
+      rootTz = -0.038 + suspWave * 0.032 - carve.abs() * 0.04;
 
-      // Inside leg flexes higher forward (`rx < 0`) with deeper knee bend (`shinRx > 0`)!
+      // Static edge angulation flexes inside knee higher vertically without longitudinal walk!
       final double rightInside = math.max(0.0, carve);
       final double leftInside = math.max(0.0, -carve);
-      final double rhythmLeg = math.sin(glidePhase) * 0.24;
+      final double parallelKneeSusp = 0.26 + suspWave * 0.075;
 
-      legLRx = -0.20 - leftInside * 0.48 - rhythmLeg;
-      shinLRx = 0.32 + leftInside * 0.52 + math.max(0.0, rhythmLeg) * 0.32;
-      footLRx = -0.10 - leftInside * 0.08;
+      legLRx = -parallelKneeSusp - leftInside * 0.24;
+      shinLRx = parallelKneeSusp * 1.42 + leftInside * 0.28;
+      footLRx = -0.11 - leftInside * 0.06 - suspWave * 0.03;
       footLRy = -carve * 0.24;
-      legLRy = -0.06 + carve * 0.10;
+      legLRy = -0.06 + carve * 0.09;
 
-      legRRx = -0.20 - rightInside * 0.48 + rhythmLeg;
-      shinRRx = 0.32 + rightInside * 0.52 + math.max(0.0, -rhythmLeg) * 0.32;
-      footRRx = -0.10 - rightInside * 0.08;
+      legRRx = -parallelKneeSusp - rightInside * 0.24;
+      shinRRx = parallelKneeSusp * 1.42 + rightInside * 0.28;
+      footRRx = -0.11 - rightInside * 0.06 - suspWave * 0.03;
       footRRy = -carve * 0.24;
-      legRRy = 0.06 + carve * 0.10;
+      legRRy = 0.06 + carve * 0.09;
 
       // Hip/Spine counter-rotation (`angulation`) so upper body faces down the fall-line!
       pelvisRz = -carve * 0.22;
       spineRz = carve * 0.28;
-      spineRx = -0.14 - math.cos(glidePhase) * 0.04;
+      spineRx = -0.16 - suspWave * 0.045;
       headRy = -carve * 0.22;
       headRz = carve * 0.16;
-      headRx = 0.10 + math.sin(glidePhase) * 0.04;
+      headRx = 0.12 + suspWave * 0.045;
 
-      // 3. Alternating 3D Arm & Pole-Planting Swing!
-      final double poleSwing = math.sin(glidePhase);
-      armUpLRy = -0.58 - math.max(0.0, -carve) * 0.32 - poleSwing * 0.10;
-      armUpRRy = 0.58 + math.max(0.0, carve) * 0.32 - poleSwing * 0.10;
-      armUpLRx = -0.30 - poleSwing * 0.38;
-      armUpRRx = -0.30 + poleSwing * 0.38;
-      armLoLRx = -0.46 - math.max(0.0, poleSwing) * 0.28;
-      armLoRRx = -0.46 - math.max(0.0, -poleSwing) * 0.28;
-      poleLRx = 0.52 + poleSwing * 0.24;
-      poleRRx = 0.52 - poleSwing * 0.24;
+      // 3. Aerodynamic Downhill / Carving Arm Tuck (elbows forward/outward, poles streamlined back,
+      // static lateral balance opening in turns, in-phase bump absorption — ZERO walk swing!)
+      final double aeroSusp = suspWave * 0.06;
+      armUpLRy = -0.62 - leftInside * 0.28 - rightInside * 0.10 - aeroSusp;
+      armUpRRy = 0.62 + rightInside * 0.28 + leftInside * 0.10 + aeroSusp;
+      armUpLRx = -0.42 + carve * 0.24 - aeroSusp;
+      armUpRRx = -0.42 - carve * 0.24 - aeroSusp;
+      armLoLRx = -0.58 - aeroSusp * 0.75;
+      armLoRRx = -0.58 - aeroSusp * 0.75;
+      armLoLRy = 0.16;
+      armLoRRy = -0.16;
+      poleLRx = 0.68 + aeroSusp * 0.55;
+      poleRRx = 0.68 + aeroSusp * 0.55;
 
       // 4. Staggered aerodynamic wind flutter on the 4 petals + accessory pendulum!
       petalTopRx = -0.16 - math.sin(glidePhase * 1.4) * 0.09;
       petalBottomRx = -0.22 - math.cos(glidePhase * 1.4 + 0.8) * 0.08;
-      petalLeftRy = -0.16 - math.sin(glidePhase * 1.4 + 1.6) * 0.10 + carve * 0.12;
-      petalRightRy = 0.16 + math.sin(glidePhase * 1.4 + 2.4) * 0.10 + carve * 0.12;
+      petalLeftRy =
+          -0.16 - math.sin(glidePhase * 1.4 + 1.6) * 0.10 + carve * 0.12;
+      petalRightRy =
+          0.16 + math.sin(glidePhase * 1.4 + 2.4) * 0.10 + carve * 0.12;
 
-      bagRy = -0.28 - bagPendulumRadians * 0.85 - math.sin(glidePhase * 1.2) * 0.18 + carve * 0.32;
+      bagRy = -0.28 -
+          bagPendulumRadians * 0.85 -
+          math.sin(glidePhase * 1.2) * 0.18 +
+          carve * 0.32;
       bagRx = 0.18 + math.cos(glidePhase) * 0.16;
-      tagRy = 0.26 + bagPendulumRadians * 0.70 + math.cos(glidePhase * 1.5) * 0.22;
+      tagRy =
+          0.26 + bagPendulumRadians * 0.70 + math.cos(glidePhase * 1.5) * 0.22;
       tagRx = 0.20 + math.sin(glidePhase * 1.5) * 0.18;
       bunnyRx = -0.08 + math.sin(glidePhase * 1.6) * 0.08;
       bunnyEarsRx = -0.22 + math.sin(glidePhase * 2.0 - 0.6) * 0.22;
@@ -2875,6 +2993,23 @@ class Vivienne3DVolumetricRig {
     );
   }
 
+  static final Map<VivienneSkiEdition, _EditionScratchBuffers> _scratchByEdition =
+      <VivienneSkiEdition, _EditionScratchBuffers>{};
+  static final Map<int, VivienneSkeletonPose3D> _spectatorPoseCache =
+      <int, VivienneSkeletonPose3D>{};
+  static final Paint _studioShadowPaint =
+      Paint()..color = const Color(0xFF14283C).withValues(alpha: 0.24);
+
+  static _EditionScratchBuffers _scratchFor(
+    VivienneSkiEdition edition,
+    int vCount,
+  ) {
+    return _scratchByEdition.putIfAbsent(
+      edition,
+      () => _EditionScratchBuffers(vCount),
+    );
+  }
+
   /// Renders the full 3D volumetric & articulated Vivienne mesh onto `canvas`
   /// using `ui.Vertices.raw(ui.VertexMode.triangles, ...)` with Z-sorting,
   /// backface culling, 3D silhouette outlines, and 3-point Studio PBR lighting.
@@ -2888,6 +3023,7 @@ class Vivienne3DVolumetricRig {
     double cameraElevationDegrees = 10.0,
     bool includeSkisAndPoles = true,
     bool drawStudioShadow = false,
+    bool emitOutlineHull = true,
   }) {
     if (pixelsPerMeter <= 1.0) return;
 
@@ -2900,26 +3036,22 @@ class Vivienne3DVolumetricRig {
         width: pixelsPerMeter * 1.18,
         height: pixelsPerMeter * 0.30,
       );
-      canvas.drawOval(
-        shadowRect,
-        Paint()..color = const Color(0xFF14283C).withValues(alpha: 0.24),
-      );
+      canvas.drawOval(shadowRect, _studioShadowPaint);
     }
 
     final _EditionVolumetricMesh mesh = _meshFor(edition);
     final int vCount = mesh.vertices.length;
+    final _EditionScratchBuffers scratch = _scratchFor(edition, vCount);
+    final Float32List xyPositions = scratch.xyPositions;
+    final Int32List argbColors = scratch.argbColors;
+    final Float64List camY = scratch.camY;
+    final List<_SortableTri> drawList = scratch.drawList..clear();
+
     final double camPitch = cameraElevationDegrees * math.pi / 180.0;
     final Mat4 camRot = Mat4.aroundPivot(
       pivot: const Vec3(0.0, 0.0, 0.85),
       rx: camPitch,
     );
-
-    // Pre-allocate vertex slots: [0 .. vCount-1] = lit vertices, [vCount .. 2*vCount-1] = 3D outline hull vertices
-    final Float32List xyPositions = Float32List(vCount * 4);
-    final Int32List argbColors = Int32List(vCount * 2);
-    final Float64List camX = Float64List(vCount);
-    final Float64List camY = Float64List(vCount);
-    final Float64List camZ = Float64List(vCount);
 
     // World-space outline extrusion radius calibrated so outlines stay razor-crisp at any zoom
     final double outlineWorldMeters =
@@ -2933,15 +3065,11 @@ class Vivienne3DVolumetricRig {
       final Mat4 boneMat = pose[rv.bone].worldMatrix;
       final Vec3 wp = boneMat.transformPoint(rv.pos);
       final Vec3 wn = boneMat.transformNormal(rv.normal);
-      final Vec3 wOutN = boneMat.transformNormal(rv.outlineNormal);
 
       final Vec3 cp = camRot.transformPoint(wp);
       final Vec3 cn = camRot.transformNormal(wn);
-      final Vec3 cOutN = camRot.transformNormal(wOutN);
 
-      camX[i] = cp.x;
       camY[i] = cp.y;
-      camZ[i] = cp.z;
 
       final double depth = math.max(1.2, cameraDistanceMeters + cp.y);
       final double persp = cameraDistanceMeters / depth;
@@ -2952,26 +3080,28 @@ class Vivienne3DVolumetricRig {
       xyPositions[i * 2 + 1] = sy;
       argbColors[i] = _shadeVertexPbr(cn, rv.mat);
 
-      // Extruded 3D Silhouette Hull Vertex (pushed along screen-plane 3D normal)
-      final int oi = vCount + i;
-      double ox = cOutN.x;
-      double oz = cOutN.z;
-      final double oLen = math.sqrt(ox * ox + oz * oz);
-      if (oLen > 1e-5) {
-        ox /= oLen;
-        oz /= oLen;
+      if (emitOutlineHull) {
+        final Vec3 wOutN = boneMat.transformNormal(rv.outlineNormal);
+        final Vec3 cOutN = camRot.transformNormal(wOutN);
+        final int oi = vCount + i;
+        double ox = cOutN.x;
+        double oz = cOutN.z;
+        final double oLen = math.sqrt(ox * ox + oz * oz);
+        if (oLen > 1e-5) {
+          ox /= oLen;
+          oz /= oLen;
+        }
+        final double ext = outlineWorldMeters * rv.mat.outlineScale;
+        final double osx =
+            soleAnchorScreen.dx + (cp.x + ox * ext) * pixelsPerMeter * persp;
+        final double osy =
+            soleAnchorScreen.dy - (cp.z + oz * ext) * pixelsPerMeter * persp;
+        xyPositions[oi * 2] = osx;
+        xyPositions[oi * 2 + 1] = osy;
+        argbColors[oi] = outlineArgb;
       }
-      final double ext = outlineWorldMeters * rv.mat.outlineScale;
-      final double osx =
-          soleAnchorScreen.dx + (cp.x + ox * ext) * pixelsPerMeter * persp;
-      final double osy =
-          soleAnchorScreen.dy - (cp.z + oz * ext) * pixelsPerMeter * persp;
-      xyPositions[oi * 2] = osx;
-      xyPositions[oi * 2 + 1] = osy;
-      argbColors[oi] = outlineArgb;
     }
 
-    final List<_SortableTri> drawList = <_SortableTri>[];
     for (int t = 0; t < mesh.triangles.length; t++) {
       final _RigTri3D tri = mesh.triangles[t];
       if (tri.isSkiGear && !includeSkisAndPoles) continue;
@@ -2993,10 +3123,8 @@ class Vivienne3DVolumetricRig {
       final double avgCamY = (camY[a] + camY[b] + camY[c]) * (1.0 / 3.0);
 
       if (cross2D <= 0.15) {
-        // Front-facing 3D triangle!
         drawList.add(_SortableTri(avgCamY, a, b, c));
-      } else if (tri.castOutline) {
-        // Back-facing 3D triangle -> emit Inverted-Hull 3D Cartoon Outline slightly behind front surface!
+      } else if (emitOutlineHull && tri.castOutline) {
         drawList.add(
           _SortableTri(
             avgCamY + 0.075,
@@ -3083,6 +3211,89 @@ class Vivienne3DVolumetricRig {
       includeSkisAndPoles: true,
     );
   }
+
+  /// High-level 3D Spectator renderer along piste borders (`v1.4.0`):
+  /// Uses all 3 `BLENDER_LAB` Vivienne models (`speedyV03`, `wonderland`, `giantDenim`)
+  /// oriented 3/4-front toward the piste (`yaw ~ 45°` on left border, `~ 315°` on right border)
+  /// with `VivienneMotionMode.spectatorCheer` (ZERO walk cycle!) and distance LOD for 60–120 FPS.
+  static void paintSpectatorOnSlope({
+    required Canvas canvas,
+    required VivienneSkiEdition edition,
+    required VivienneSpectatorCheerStyle cheerStyle,
+    required Offset soleAnchorScreen,
+    required double unitScalePx,
+    required double timeSeconds,
+    required bool isLeftOfTrack,
+    double scaleMultiplier = 1.0,
+    int yawVariant = 0,
+  }) {
+    final double pixelsPerMeter = unitScalePx * 1.48 * scaleMultiplier;
+    if (pixelsPerMeter <= 4.2) return;
+
+    // 3/4-front orientation turned toward the ski slope so her 3D wooden face,
+    // 4 leather petals, Monogram eye, waving V-arms & two-footed jumps are clearly visible!
+    final int clampedYawVar = yawVariant % 3;
+    final double yawOffset = (clampedYawVar - 1) * 9.0;
+    final double yawDegrees =
+        (isLeftOfTrack ? 44.0 : 316.0) + yawOffset;
+
+    // 72 quantized phase buckets per ~1.31s cheer cycle -> butter-smooth 60 FPS animation
+    // while caching FK matrices across crowd members & frames!
+    const double cyclePeriod = (2.0 * math.pi) / 4.8;
+    final double wrappedTime =
+        ((timeSeconds % (cyclePeriod * 2.0)) + cyclePeriod * 2.0) %
+            (cyclePeriod * 2.0);
+    final int phaseBucket =
+        ((wrappedTime / (cyclePeriod * 2.0)) * 72.0).floor().clamp(0, 71);
+    final int cacheKey = edition.index |
+        (cheerStyle.index << 3) |
+        ((isLeftOfTrack ? 1 : 0) << 6) |
+        (clampedYawVar << 7) |
+        (phaseBucket << 9);
+
+    if (_spectatorPoseCache.length > 1200) {
+      _spectatorPoseCache.clear();
+    }
+    final VivienneSkeletonPose3D pose = _spectatorPoseCache.putIfAbsent(
+      cacheKey,
+      () => VivienneSkeletonPose3D.evaluate(
+        edition: edition,
+        timeSeconds: (phaseBucket / 72.0) * (cyclePeriod * 2.0),
+        mode: VivienneMotionMode.spectatorCheer,
+        cheerStyle: cheerStyle,
+        yawDegrees: yawDegrees,
+      ),
+    );
+
+    // Adaptive LOD: crisp 3D silhouette hull for near/mid spectators; single-pass PBR at far distance
+    final bool emitOutline = pixelsPerMeter >= 18.5;
+
+    paintCharacter(
+      canvas: canvas,
+      edition: edition,
+      pose: pose,
+      soleAnchorScreen: soleAnchorScreen,
+      pixelsPerMeter: pixelsPerMeter,
+      cameraDistanceMeters: 6.4,
+      cameraElevationDegrees: 12.0,
+      includeSkisAndPoles: false,
+      drawStudioShadow: true,
+      emitOutlineHull: emitOutline,
+    );
+  }
+}
+
+class _EditionScratchBuffers {
+  _EditionScratchBuffers(int vCount)
+      : xyPositions = Float32List(vCount * 4),
+        argbColors = Int32List(vCount * 2),
+        camY = Float64List(vCount),
+        drawList = <_SortableTri>[];
+
+  final Float32List xyPositions;
+  final Int32List argbColors;
+  final Float64List camY;
+  final List<_SortableTri> drawList;
 }
 
 // =============================================================================

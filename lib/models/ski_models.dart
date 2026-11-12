@@ -1,6 +1,84 @@
 import 'package:flutter/material.dart';
 
-/// The 3 completely skiable 3D Alpine tracks in `VIVI AU SKI : Descente Royale 3D` (`v1.2.0`).
+/// Selectable Gameplay Modes in `VIVI AU SKI : Descente Royale 3D` (`v1.4.0`).
+enum SkiGameMode {
+  descenteBosses(
+    id: 'descente_bosses',
+    selectKeyName: 'select_mode_descente',
+    title: 'DESCENTE & BOSSES',
+    shortLabel: 'DESCENTE',
+    subtitle: 'Relief alpin, bosses 3D & 3 tailles de tremplins',
+  ),
+  slalomComplet(
+    id: 'slalom_complet',
+    selectKeyName: 'select_mode_slalom',
+    title: 'SLALOM COMPLET',
+    shortLabel: 'SLALOM',
+    subtitle: 'Portes Gauche/Droite alternées, trace & combos',
+  );
+
+  const SkiGameMode({
+    required this.id,
+    required this.selectKeyName,
+    required this.title,
+    required this.shortLabel,
+    required this.subtitle,
+  });
+
+  final String id;
+  final String selectKeyName;
+  final String title;
+  final String shortLabel;
+  final String subtitle;
+}
+
+/// The 3 Jump Ramp size tiers (`v1.4.0`): Mini Kicker, Pro Blossom Tabletop, Royal Big Air.
+enum SkiRampSizeTier {
+  small(
+    widthMeters: 4.5,
+    lengthMeters: 6.8,
+    heightMeters: 1.05,
+    boostVy: 9.8,
+    defaultLabel: 'MINI TREMPLIN',
+  ),
+  medium(
+    widthMeters: 5.8,
+    lengthMeters: 10.2,
+    heightMeters: 1.80,
+    boostVy: 12.8,
+    defaultLabel: 'TREMPLIN BLOSSOM',
+  ),
+  large(
+    widthMeters: 7.4,
+    lengthMeters: 14.6,
+    heightMeters: 2.80,
+    boostVy: 16.2,
+    defaultLabel: 'MÉGA TREMPLIN BIG AIR',
+  );
+
+  const SkiRampSizeTier({
+    required this.widthMeters,
+    required this.lengthMeters,
+    required this.heightMeters,
+    required this.boostVy,
+    required this.defaultLabel,
+  });
+
+  final double widthMeters;
+  final double lengthMeters;
+  final double heightMeters;
+  final double boostVy;
+  final String defaultLabel;
+}
+
+/// Festive 3D cheer styles for border Vivienne spectators (`v1.4.0`, zero walk cycle!).
+enum VivienneSpectatorCheerStyle {
+  waveArms,
+  jumpAndWave,
+  doubleJumpCheer,
+}
+
+/// The 3 completely skiable 3D Alpine tracks in `VIVI AU SKI : Descente Royale 3D` (`v1.4.0`).
 enum SkiTrackId {
   greenBlossomValley(
     id: 'piste_verte',
@@ -8,9 +86,9 @@ enum SkiTrackId {
     title: 'Vallée Blossom Ensoleillée',
     shortTitle: 'Piste Verte',
     difficultyLabel: 'PISTE VERTE • DÉBUTANT',
-    summaryMetrics: '1 200 m • Dénivelé -535 m (24°) • 4 Tremplins',
+    summaryMetrics: '1 200 m • -535 m (24°) • 22 Bosses • 6 Tremplins',
     description:
-        'Ciel azur alpin, soleil radieux, pente dynamique à 24° (-535 m), banderoles LV_NEO, télécabines et 4 tremplins panoramiques.',
+        'Ciel azur alpin, crêtes & murs à 24° (-535 m), 22 bosses intégrées, 6 tremplins (3 tailles), 28 portes Slalom et foule Vivienne 3D.',
     lengthMeters: 1200.0,
     verticalDropMeters: 535.0,
     slopeDegrees: 24.0,
@@ -20,9 +98,10 @@ enum SkiTrackId {
     trackHalfWidthMeters: 15.5,
     curveAmplitudeMeters: 9.5,
     pineTreeCount: 42,
-    mogulCount: 8,
-    jumpRampCount: 4,
-    slalomGateCount: 10,
+    mogulCount: 22,
+    jumpRampCount: 6,
+    slalomGateCount: 12,
+    slalomModeGateCount: 28,
     blossomCount: 35,
     skyTopColor: Color(0xFF1E88E5),
     skyMidColor: Color(0xFF64B5F6),
@@ -46,9 +125,9 @@ enum SkiTrackId {
     title: 'Forêt des Sapins d\'Asnières',
     shortTitle: 'Piste Bleue',
     difficultyLabel: 'PISTE BLEUE • CARVING',
-    summaryMetrics: '1 800 m • Dénivelé -980 m (34°) • 7 Tremplins',
+    summaryMetrics: '1 800 m • -980 m (34°) • 34 Bosses • 9 Tremplins',
     description:
-        'Soleil couchant doré, fort dénivelé -980 m (34°), sapins enneigés, banderoles LV_NEO et 16 bosses rythmées.',
+        'Soleil couchant doré, cassures de pente à 34° (-980 m), 34 bosses maillées, 9 tremplins (3 tailles), 38 portes Slalom et foule Vivienne 3D.',
     lengthMeters: 1800.0,
     verticalDropMeters: 980.0,
     slopeDegrees: 34.0,
@@ -58,9 +137,10 @@ enum SkiTrackId {
     trackHalfWidthMeters: 14.0,
     curveAmplitudeMeters: 14.0,
     pineTreeCount: 70,
-    mogulCount: 16,
-    jumpRampCount: 7,
-    slalomGateCount: 14,
+    mogulCount: 34,
+    jumpRampCount: 9,
+    slalomGateCount: 16,
+    slalomModeGateCount: 38,
     blossomCount: 50,
     skyTopColor: Color(0xFF283593),
     skyMidColor: Color(0xFFEC8F6A),
@@ -84,9 +164,9 @@ enum SkiTrackId {
     title: 'Cimes Étoilées Vendôme',
     shortTitle: 'Piste Noire Or',
     difficultyLabel: 'PISTE NOIRE OR • EXPERT',
-    summaryMetrics: '2 500 m • Dénivelé -1 650 m (45°) • 10 Méga-Sauts',
+    summaryMetrics: '2 500 m • -1 650 m (45°) • 48 Bosses • 12 Tremplins',
     description:
-        'Nuit alpine étoilée sous aurore boréale, mur vertigineux à 45° (-1 650 m), vitesse extrême et 10 méga-tremplins Big Air.',
+        'Nuit étoilée & aurore boréale, murs plongeants à 45° (-1 650 m), 48 bosses, 12 tremplins Big Air, 50 portes Slalom et foule Vivienne 3D.',
     lengthMeters: 2500.0,
     verticalDropMeters: 1650.0,
     slopeDegrees: 45.0,
@@ -96,9 +176,10 @@ enum SkiTrackId {
     trackHalfWidthMeters: 12.8,
     curveAmplitudeMeters: 18.0,
     pineTreeCount: 98,
-    mogulCount: 24,
-    jumpRampCount: 10,
-    slalomGateCount: 18,
+    mogulCount: 48,
+    jumpRampCount: 12,
+    slalomGateCount: 22,
+    slalomModeGateCount: 50,
     blossomCount: 70,
     skyTopColor: Color(0xFF0D1B2A),
     skyMidColor: Color(0xFF1B3A4B),
@@ -137,6 +218,7 @@ enum SkiTrackId {
     required this.mogulCount,
     required this.jumpRampCount,
     required this.slalomGateCount,
+    required this.slalomModeGateCount,
     required this.blossomCount,
     required this.skyTopColor,
     required this.skyMidColor,
@@ -174,6 +256,7 @@ enum SkiTrackId {
   final int mogulCount;
   final int jumpRampCount;
   final int slalomGateCount;
+  final int slalomModeGateCount;
   final int blossomCount;
   final Color skyTopColor;
   final Color skyMidColor;
@@ -459,7 +542,7 @@ enum VivienneBlenderPose {
   final String assetPath;
 }
 
-/// 3D Scenery & Obstacle kinds placed along the ski tracks (`v1.2.0`).
+/// 3D Scenery, Obstacle & Spectator kinds placed along the ski tracks (`v1.4.0`).
 enum SkiPropKind {
   alpinePineTree,
   giantSnowPine,
@@ -472,6 +555,7 @@ enum SkiPropKind {
   snowCannon,
   startArch,
   finishArch,
+  vivienneSpectator,
 }
 
 @immutable
@@ -486,6 +570,8 @@ class SkiWorldProp3D {
     this.snowLoad = 1.0,
     this.hitRadius = 1.15,
     this.isOnPiste = false,
+    this.spectatorEdition,
+    this.spectatorCheerStyle,
   });
 
   final int id;
@@ -497,6 +583,8 @@ class SkiWorldProp3D {
   final double snowLoad;
   final double hitRadius;
   final bool isOnPiste;
+  final VivienneSkiEdition? spectatorEdition;
+  final VivienneSpectatorCheerStyle? spectatorCheerStyle;
 }
 
 @immutable
@@ -538,17 +626,41 @@ class SkiJumpRamp3D {
     required this.id,
     required this.x,
     required this.z,
-    this.width = 5.6,
-    this.length = 9.5,
-    this.heightMeters = 1.65,
-    this.boostVy = 11.8,
+    this.sizeTier = SkiRampSizeTier.medium,
+    this.width = 5.8,
+    this.length = 10.2,
+    this.heightMeters = 1.80,
+    this.boostVy = 12.8,
     this.label = 'TREMPLIN BLOSSOM',
     this.triggered = false,
   });
 
+  factory SkiJumpRamp3D.fromTier({
+    required int id,
+    required double x,
+    required double z,
+    required SkiRampSizeTier sizeTier,
+    String? customLabel,
+    bool triggered = false,
+  }) {
+    return SkiJumpRamp3D(
+      id: id,
+      x: x,
+      z: z,
+      sizeTier: sizeTier,
+      width: sizeTier.widthMeters,
+      length: sizeTier.lengthMeters,
+      heightMeters: sizeTier.heightMeters,
+      boostVy: sizeTier.boostVy,
+      label: customLabel ?? sizeTier.defaultLabel,
+      triggered: triggered,
+    );
+  }
+
   final int id;
   final double x;
   final double z;
+  final SkiRampSizeTier sizeTier;
   final double width;
   final double length;
   final double heightMeters;
@@ -561,6 +673,7 @@ class SkiJumpRamp3D {
       id: id,
       x: x,
       z: z,
+      sizeTier: sizeTier,
       width: width,
       length: length,
       heightMeters: heightMeters,
@@ -578,7 +691,10 @@ class SkiSlalomGate3D {
     required this.centerX,
     required this.z,
     this.halfWidth = 4.0,
+    this.isLeftGate = true,
     this.isGoldRed = true,
+    this.gateNumber = 1,
+    this.poleFlex = 0.0,
     this.passed = false,
     this.missed = false,
   });
@@ -587,17 +703,27 @@ class SkiSlalomGate3D {
   final double centerX;
   final double z;
   final double halfWidth;
+  final bool isLeftGate;
   final bool isGoldRed;
+  final int gateNumber;
+  final double poleFlex;
   final bool passed;
   final bool missed;
 
-  SkiSlalomGate3D copyWith({bool? passed, bool? missed}) {
+  SkiSlalomGate3D copyWith({
+    bool? passed,
+    bool? missed,
+    double? poleFlex,
+  }) {
     return SkiSlalomGate3D(
       id: id,
       centerX: centerX,
       z: z,
       halfWidth: halfWidth,
+      isLeftGate: isLeftGate,
       isGoldRed: isGoldRed,
+      gateNumber: gateNumber,
+      poleFlex: poleFlex ?? this.poleFlex,
       passed: passed ?? this.passed,
       missed: missed ?? this.missed,
     );
